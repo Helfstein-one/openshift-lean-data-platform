@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minio
+  namespace: data-platform
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: minio
+  template:
+    metadata:
+      labels:
+        app: minio
+    spec:
+      containers:
+      - name: minio
+        image: quay.io/minio/minio:RELEASE.2024-01-18T22-51-28Z-arm64
+        args: ["server", "/data", "--console-address", ":9001"]
+        env:
+        - name: MINIO_ROOT_USER
+          value: "admin"
+        - name: MINIO_ROOT_PASSWORD
+          value: "Password123"
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 250m
+            memory: 256Mi
+        ports:
+        - containerPort: 9000
+          name: s3
+        - containerPort: 9001
+          name: console
+        volumeMounts:
+        - name: data
+          mountPath: /data
+      volumes:
+      - name: data
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio
+  namespace: data-platform
+spec:
+  ports:
+  - port: 9000
+    name: s3
+  - port: 9001
+    name: console
+  selector:
+    app: minio
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: minio-console
+  namespace: data-platform
+spec:
+  to:
+    kind: Service
+    name: minio
+  port:
+    targetPort: console

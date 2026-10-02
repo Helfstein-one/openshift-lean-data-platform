@@ -1,0 +1,24 @@
+import time
+from src.domain.generators import EventGenerator
+from src.application.ports import MessagePublisher
+
+class ProduceEventsUseCase:
+    def __init__(self, publisher: MessagePublisher, topic: str, interval: float):
+        self.publisher = publisher
+        self.topic = topic
+        self.interval = interval
+
+    def execute(self) -> None:
+        while True:
+            event = EventGenerator.create_random_event()
+            envelope = {
+                "spec_version": "1.0",
+                "event_id": event.event_id,
+                "event_type": event.event_type,
+                "source": "core.banking.stream",
+                "partition_key": event.partition_key,
+                "timestamp_utc": event.timestamp_utc,
+                "data": event.payload
+            }
+            self.publisher.publish(self.topic, event.partition_key, envelope)
+            time.sleep(self.interval)

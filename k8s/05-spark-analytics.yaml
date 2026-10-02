@@ -1,0 +1,104 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: spark-analytics-code
+  namespace: data-platform
+data:
+  etl_contabil.py: |
+    import os
+    from pyspark.sql import SparkSession
+    from pyspark.sql.functions import col, when, sum as _sum, count, to_date, lit
+    from pyspark.sql.types import DoubleType
+
+    spark = SparkSession.builder \
+        .appName("FinancialLedgerReversals") \
+        .getOrCreate()
+    spark.sparkContext.setLogLevel("ERROR")
+
+    # Ingestão do Data Lake MinIO S3
+    df_raw = spark.read.json("s3a://data-lake/eventos-financeiros/*/*/*/*.json")
+
+    # Normalização Contábil: Reversões geram fluxo financeiro negativo
+    df_normalized = df_raw.select(
+        col("event_type"),
+        to_date(col("timestamp_utc")).alias("data_contabil"),
+        col("partition_key").alias("cliente_id"),
+        when(col("event_type") == "PAGAMENTO_PARCELA", col("data.valor_pago").cast(DoubleType()))
+        .when(col("event_type") == "TRANSACAO_PIX", col("data.valor").cast(DoubleType()))
+        .when(col("event_type") == "CONTRATO_EMITIDO", col("data.valor_contratado").cast(DoubleType()))
+        .when(col("event_type") == "ESTORNO_PARCELA", -col("data.valor_estornado").cast(DoubleType()))
+        .when(col("event_type") == "ESTORNO_PIX", -col("data.valor_devolvido").cast(DoubleType()))
+        .when(col("event_type") == "CONTESTACAO_TRANSACAO", -col("data.valor_contestado").cast(DoubleType()))
+        .otherwise(0.0).alias("valor_movimento"),
+        when(col("event_type").isin("ESTORNO_PARCELA", "ESTORNO_PIX", "CONTESTACAO_TRANSACAO"), 1)
+        .otherwise(0).alias("flg_reversao")
+    )
+
+    df_consolidado = df_normalized.groupBy("data_contabil").agg(
+        _sum(when(col("event_type") == "CONTRATO_EMITIDO", col("valor_movimento")).otherwise(0.0)).alias("vol_credito_concedido"),
+        _sum(when(col("event_type").isin("PAGAMENTO_PARCELA", "TRANSACAO_PIX"), col("valor_movimento")).otherwise(0.0)).alias("vol_credito_liquidado"),
+        _sum(when(col("flg_reversao") == 1, -col("valor_movimento")).otherwise(0.0)).alias("vol_estornado_total"),
+        _sum("valor_movimento").alias("saldo_liquido_real"),
+        _sum("flg_reversao").alias("qtd_eventos_reversos"),
+        count("*").alias("qtd_total_transacoes")
+    )
+
+    # Persistência via JDBC no PostgreSQL
+    df_consolidado.write \
+        .format("jdbc") \
+        .option("url", "jdbc:postgresql://superset-postgresql.data-platform.svc:5432/superset") \
+        .option("dbtable", "faturamento_contabil_diario") \
+        .option("user", "admin") \
+        .option("password", "admin123") \
+        .option("driver", "org.postgresql.Driver") \
+        .mode("overwrite") \
+        .save()
+
+    spark.stop()
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: spark-analytics-cron
+  namespace: data-platform
+spec:
+  schedule: "0 */2 * * *" # Executa a cada 2 horas
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 1
+  concurrencyPolicy: Forbid
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          restartPolicy: OnFailure
+          serviceAccountName: spark-sa
+          containers:
+          - name: spark-driver
+            image: apache/spark-py:v3.5.0
+            command: ["/bin/sh", "-c"]
+            args:
+              - |
+                /opt/spark/bin/spark-submit \
+                  --master "local[2]" \
+                  --driver-memory 600m \
+                  --conf "spark.hadoop.fs.s3a.endpoint=http://minio.data-platform.svc:9000" \
+                  --conf "spark.hadoop.fs.s3a.access.key=admin" \
+                  --conf "spark.hadoop.fs.s3a.secret.key=Password123" \
+                  --conf "spark.hadoop.fs.s3a.path.style.access=true" \
+                  --conf "spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem" \
+                  --conf "spark.jars.packages=org.apache.hadoop:hadoop-aws:3.3.4,org.postgresql:postgresql:42.6.0" \
+                  /opt/spark/work-dir/etl_contabil.py
+            resources:
+              requests:
+                cpu: 500m
+                memory: 600Mi
+              limits:
+                cpu: 1500m
+                memory: 850Mi
+            volumeMounts:
+            - name: code
+              mountPath: /opt/spark/work-dir
+          volumes:
+          - name: code
+            configMap:
+              name: spark-analytics-code
