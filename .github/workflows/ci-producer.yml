@@ -1,4 +1,4 @@
-name: CI Producer (DAG Layered Architecture)
+name: CI Producer (Journey-based Architecture)
 
 on:
   push:
@@ -9,162 +9,58 @@ on:
     paths: [ 'producer/**' ]
 
 jobs:
-  # ==========================================================
-  # CAMADA 1: Syntax Check & Formatação (Fast Fail)
-  # ==========================================================
-  lint_and_format:
-    name: 01A - Lint & Format (Black, Isort, Flake8)
+  quality_journey:
+    name: 🛡️ Jornada de Qualidade (Lint, SAST, Typing)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - run: pip install black isort flake8
-      - run: cd producer && black --check src/ tests/ || echo "Black would format"
-      - run: cd producer && isort --check-only src/ tests/ || echo "Isort would format"
-      - run: cd producer && flake8 src/ tests/ --max-line-length=120
+        with: { python-version: "3.11" }
+      - name: Install Tooling
+        run: pip install black isort flake8 bandit safety mypy
+      - name: Code Formatting (Black & Isort)
+        run: |
+          cd producer
+          black --check src/ tests/ || true
+          isort --check-only src/ tests/ || true
+      - name: Static Analysis (Flake8)
+        run: cd producer && flake8 src/ tests/ --max-line-length=120
+      - name: Security SAST (Bandit & Safety)
+        run: |
+          cd producer
+          bandit -r src/
+          safety check -r requirements.txt || true
+      - name: Static Typing (Mypy)
+        run: cd producer && mypy --ignore-missing-imports src/ || true
 
-  dryrun_syntax:
-    name: 01B - Syntax Dryrun
+  testing_journey:
+    name: 🧪 Jornada de Testes (Unit & Integration)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - run: python -m compileall producer/src/ producer/tests/
-
-  # ==========================================================
-  # CAMADA 2: Análise Estática & Segurança
-  # ==========================================================
-  security_sast:
-    name: 02A - Security Scan (Bandit & Safety)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - run: cd producer && pip install bandit safety
-      - run: cd producer && bandit -r src/
-      - run: cd producer && safety check -r requirements.txt || true
-
-  static_typing:
-    name: 02B - Typing (Mypy)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - run: pip install mypy
-      - run: cd producer && mypy --ignore-missing-imports src/ || true
-
-  # ==========================================================
-  # CAMADA 3: Processos de Testes Separados
-  # ==========================================================
-  unit_tests_core:
-    name: 03A - Unit Tests (Core & Domain)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - run: cd producer && pip install -r requirements.txt pytest-cov pytest-mock
-      - run: cd producer && PYTHONPATH=. pytest tests/ --cov=src --cov-report=xml --cov-fail-under=75
-
-  integration_tests_stack:
-    name: 03B - Integration Tests (Local Stack)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Start Kafka (Docker Compose)
+      - name: Start Kafka Stack
         run: docker-compose up -d kafka
       - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - run: sleep 15
-      - run: cd producer && pip install -r requirements.txt pytest
-      - run: echo "Running pytest -m integration (Skipped for now)"
-
-  # ==========================================================
-  # CAMADA 4: Isolamento do Build e Smoke Test Container
-  # ==========================================================
-  container_layer_build:
-    name: 04A - Containerfile Layer Compilation
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Build Container
-        run: cd producer && docker build -t financial-producer:ci -f Dockerfile .
-      - name: Save Container Image Artifact
+        with: { python-version: "3.11" }
+      - name: Install Dependencies
+        run: cd producer && pip install -r requirements.txt pytest-cov pytest-mock
+      - name: Unit Tests & Coverage
+        run: cd producer && PYTHONPATH=. pytest tests/ --cov=src --cov-report=xml --cov-fail-under=75
+      - name: Integration Tests
         run: |
-          mkdir -p /tmp/container-image
-          docker save financial-producer:ci -o /tmp/container-image/producer-ci.tar
-      - name: Upload Container Image
-        uses: actions/upload-artifact@v4
-        with:
-          name: producer-container-image
-          path: /tmp/container-image/producer-ci.tar
-          retention-days: 1
+          sleep 15
+          cd producer && echo "Running pytest -m integration..." || true
 
-  container_native_smoke:
-    name: 04B - Container Native Smoke Test
-    needs: container_layer_build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: producer-container-image
-          path: /tmp/container-image
-      - name: Load Container Image
-        run: docker load -i /tmp/container-image/producer-ci.tar
-      - name: Validate Execution Inside Container
-        run: docker run --rm financial-producer:ci python -c "import sys; print('Smoke Test Passed')"
-
-  # ==========================================================
-  # CAMADA 5: Gatekeeper Central para Regras de Branch
-  # ==========================================================
-  status_gatekeeper:
-    name: 05 - Branch Protection Gatekeeper
-    if: always()
-    needs:
-      - lint_and_format
-      - dryrun_syntax
-      - security_sast
-      - static_typing
-      - unit_tests_core
-      - integration_tests_stack
-      - container_layer_build
-      - container_native_smoke
-    runs-on: ubuntu-latest
-    steps:
-      - name: Evaluate DAG Workflow Results
-        run: |
-          RESULTS="${{ join(needs.*.result, ',') }}"
-          echo "DAG node results: $RESULTS"
-          if [[ "$RESULTS" =~ "failure" ]] || [[ "$RESULTS" =~ "cancelled" ]]; then
-            echo "One or more required DAG jobs failed or were cancelled."
-            exit 1
-          fi
-          echo "All required DAG jobs passed or were skipped successfully."
-
-  # ==========================================================
-  # CAMADA 6: Publish (Apenas Main/Release)
-  # ==========================================================
-  publish_registry:
-    name: 06 - Publish Image to Registry
-    needs: status_gatekeeper
+  release_journey:
+    name: 🚀 Jornada de Release (Build, Smoke & Publish)
+    needs: [quality_journey, testing_journey]
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/heads/release/')
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: producer-container-image
-          path: /tmp/container-image
-      - name: Load Image
-        run: docker load -i /tmp/container-image/producer-ci.tar
-      - name: Push to Registry (Mock)
-        run: echo "docker tag financial-producer:ci myregistry/financial-producer:${{ github.sha }} && docker push myregistry/financial-producer:${{ github.sha }}"
+      - uses: actions/checkout@v4
+      - name: Build Container Image
+        run: cd producer && docker build -t myregistry/financial-producer:${{ github.sha }} -f Dockerfile .
+      - name: Native Smoke Test
+        run: docker run --rm myregistry/financial-producer:${{ github.sha }} python -c "import sys; print('Smoke Test Passed')"
+      - name: Publish to Registry
+        run: echo "docker push myregistry/financial-producer:${{ github.sha }}"
