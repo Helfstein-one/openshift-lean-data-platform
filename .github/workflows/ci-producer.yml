@@ -1,4 +1,4 @@
-name: CI Producer (Journey-based Architecture)
+name: CI Producer (Ultra Granular Journey Tree)
 
 on:
   push:
@@ -9,32 +9,91 @@ on:
     paths: [ 'producer/**' ]
 
 jobs:
-  quality_journey:
-    name: 🛡️ Jornada de Qualidade (Lint, SAST, Typing)
+  # ==========================================
+  # 🛡️ JORNADA DE QUALIDADE (Execução Paralela)
+  # ==========================================
+  q_format_black:
+    name: 🎨 Format - Black
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.11" }
-      - name: Install Tooling
-        run: pip install black isort flake8 bandit safety mypy
-      - name: Code Formatting (Black & Isort)
-        run: |
-          cd producer
-          black --check src/ tests/ || true
-          isort --check-only src/ tests/ || true
-      - name: Static Analysis (Flake8)
-        run: cd producer && flake8 src/ tests/ --max-line-length=120
-      - name: Security SAST (Bandit & Safety)
-        run: |
-          cd producer
-          bandit -r src/
-          safety check -r requirements.txt || true
-      - name: Static Typing (Mypy)
-        run: cd producer && mypy --ignore-missing-imports src/ || true
+      - run: pip install black
+      - run: cd producer && black --check src/ tests/ || true
 
-  testing_journey:
-    name: 🧪 Jornada de Testes (Unit & Integration)
+  q_format_isort:
+    name: 🎨 Format - Isort
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pip install isort
+      - run: cd producer && isort --check-only src/ tests/ || true
+
+  q_lint_flake8:
+    name: 🔍 Lint - Flake8
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pip install flake8
+      - run: cd producer && flake8 src/ tests/ --max-line-length=120
+
+  q_sec_bandit:
+    name: 🛡️ SAST - Bandit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pip install bandit
+      - run: cd producer && bandit -r src/
+
+  q_sec_safety:
+    name: 🛡️ SAST - Safety
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: cd producer && pip install safety
+      - run: cd producer && safety check -r requirements.txt || true
+
+  q_type_mypy:
+    name: 🏷️ Type - Mypy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pip install mypy
+      - run: cd producer && mypy --ignore-missing-imports src/ || true
+
+  gate_quality:
+    name: 🚥 GATE - Quality Passed
+    needs: [q_format_black, q_format_isort, q_lint_flake8, q_sec_bandit, q_sec_safety, q_type_mypy]
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Quality Journey Completed."
+
+  # ==========================================
+  # 🧪 JORNADA DE TESTES (Execução Paralela)
+  # ==========================================
+  t_unit_tests:
+    name: 🧪 Test - Unit & Coverage
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: cd producer && pip install -r requirements.txt pytest-cov pytest-mock
+      - run: cd producer && PYTHONPATH=. pytest tests/ --cov=src --cov-fail-under=75
+
+  t_integration:
+    name: 🔗 Test - Integration Stack
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -42,25 +101,50 @@ jobs:
         run: docker-compose up -d kafka
       - uses: actions/setup-python@v5
         with: { python-version: "3.11" }
-      - name: Install Dependencies
-        run: cd producer && pip install -r requirements.txt pytest-cov pytest-mock
-      - name: Unit Tests & Coverage
-        run: cd producer && PYTHONPATH=. pytest tests/ --cov=src --cov-report=xml --cov-fail-under=75
-      - name: Integration Tests
-        run: |
-          sleep 15
-          cd producer && echo "Running pytest -m integration..." || true
+      - run: sleep 15
+      - run: cd producer && pip install -r requirements.txt pytest
+      - run: cd producer && echo "Running pytest -m integration..." || true
 
-  release_journey:
-    name: 🚀 Jornada de Release (Build, Smoke & Publish)
-    needs: [quality_journey, testing_journey]
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/heads/release/')
+  gate_testing:
+    name: 🚥 GATE - Testing Passed
+    needs: [t_unit_tests, t_integration]
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Testing Journey Completed."
+
+  # ==========================================
+  # 🚀 JORNADA DE RELEASE (Sequencial e Protegida)
+  # ==========================================
+  r_build:
+    name: 🐳 Build - Docker Image
+    needs: [gate_quality, gate_testing]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Build Container Image
-        run: cd producer && docker build -t myregistry/financial-producer:${{ github.sha }} -f Dockerfile .
-      - name: Native Smoke Test
-        run: docker run --rm myregistry/financial-producer:${{ github.sha }} python -c "import sys; print('Smoke Test Passed')"
-      - name: Publish to Registry
-        run: echo "docker push myregistry/financial-producer:${{ github.sha }}"
+      - run: cd producer && docker build -t myregistry/financial-producer:${{ github.sha }} -f Dockerfile .
+      - run: docker save myregistry/financial-producer:${{ github.sha }} > img.tar
+      - uses: actions/upload-artifact@v4
+        with:
+          name: img-producer
+          path: img.tar
+
+  r_smoke:
+    name: 🔥 Smoke - Native Container Test
+    needs: [r_build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: img-producer }
+      - run: docker load < img.tar
+      - run: docker run --rm myregistry/financial-producer:${{ github.sha }} python -c "import sys; print('OK')"
+
+  r_publish:
+    name: 🚀 Publish - Registry Push
+    needs: [r_smoke]
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/heads/release/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with: { name: img-producer }
+      - run: docker load < img.tar
+      - run: echo "docker push myregistry/financial-producer:${{ github.sha }}"
