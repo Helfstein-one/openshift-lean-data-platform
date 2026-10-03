@@ -3,10 +3,10 @@ name: CI Analytics (Ultra Granular Journey Tree)
 on:
   push:
     branches: [ "main", "develop", "feature/*", "release/*", "hotfix/*" ]
-    paths: [ 'analytics/**', '.github/workflows/ci-analytics.yml' ]
+    paths: [ 'analytics/**', '.github/workflows/ci-analytics.yml', 'docker-compose.yml' ]
   pull_request:
     branches: [ "main", "develop" ]
-    paths: [ 'analytics/**' ]
+    paths: [ 'analytics/**', 'docker-compose.yml' ]
 
 jobs:
   # ==========================================
