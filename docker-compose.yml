@@ -20,7 +20,7 @@ services:
       - KAFKA_NUM_PARTITIONS=1
 
   minio:
-    image: quay.io/minio/minio:latest
+    image: omerlh/localstack-s3:latest
     ports:
       - "9000:9000"
       - "9001:9001"
