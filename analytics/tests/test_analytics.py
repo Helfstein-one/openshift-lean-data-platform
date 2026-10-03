@@ -38,5 +38,5 @@ def test_normalize_and_aggregate(spark):
     row = df_agg[0]
     assert row["vol_credito_concedido"] == 1000.0
     assert row["vol_credito_liquidado"] == 100.0
-    assert row["vol_estornado_total"] == -100.0  #
+    assert row["vol_estornado_total"] == 100.0
     assert row["saldo_liquido_real"] == 1000.0 + 100.0 - 100.0

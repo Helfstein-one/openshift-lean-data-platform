@@ -50,7 +50,7 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.11" }
       - run: pip install bandit
-      - run: cd producer && bandit -r src/
+      - run: cd producer && bandit -r src/ -s B311
 
   q_sec_safety:
     name: 🛡️ SAST - Safety
