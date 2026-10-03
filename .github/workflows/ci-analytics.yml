@@ -1,4 +1,4 @@
-name: CI Analytics (Ultra Granular GitFlow)
+name: CI Analytics (Fan-out / Fan-in Parallel Tree)
 
 on:
   push:
@@ -10,18 +10,18 @@ on:
 
 jobs:
   format-check:
-    name: 🎨 Code Formatting (Black/Isort)
+    name: 🎨 Code Formatting
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v4
         with: { python-version: '3.10' }
       - run: pip install black isort
-      - run: cd analytics && black --check src/ tests/ || echo "Black would format"
-      - run: cd analytics && isort --check-only src/ tests/ || echo "Isort would format"
+      - run: cd analytics && black --check src/ tests/ || true
+      - run: cd analytics && isort --check-only src/ tests/ || true
 
   lint:
-    name: 🔍 Static Analysis (Flake8)
+    name: 🔍 Static Analysis
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -31,7 +31,7 @@ jobs:
       - run: flake8 analytics/src/ analytics/tests/ --max-line-length=120
 
   security-sast:
-    name: 🛡️ Security Scan (Bandit & Safety)
+    name: 🛡️ Security Scan
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -42,8 +42,7 @@ jobs:
       - run: cd analytics && safety check -r requirements.txt || true
 
   test-unit:
-    name: 🧪 Unit Tests & Coverage
-    needs: [format-check, lint, security-sast]
+    name: 🧪 Unit Tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -51,15 +50,9 @@ jobs:
         with: { python-version: '3.10' }
       - run: cd analytics && pip install -r requirements.txt pytest-cov
       - run: cd analytics && PYTHONPATH=. pytest tests/ --cov=src --cov-report=xml --cov-fail-under=75
-      - name: Upload Coverage
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-analytics
-          path: analytics/coverage.xml
 
   test-integration:
-    name: 🔗 Integration Tests (Local Stack)
-    needs: [test-unit]
+    name: 🔗 Integration Tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -67,14 +60,12 @@ jobs:
         run: docker-compose up -d minio postgres
       - uses: actions/setup-python@v4
         with: { python-version: '3.10' }
-      - name: Wait for Services
-        run: sleep 15
+      - run: sleep 15
       - run: cd analytics && pip install -r requirements.txt pytest
       - run: echo "Running pytest -m integration..."
 
   build-image:
     name: 🐳 Build Docker Image
-    needs: [test-integration]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -87,9 +78,16 @@ jobs:
           name: analytics-docker-image
           path: analytics.tar
 
+  quality-gate:
+    name: ✅ Quality Gate (Fan-in)
+    needs: [format-check, lint, security-sast, test-unit, test-integration]
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "All parallel quality checks passed!"
+
   publish:
     name: 🚀 Publish (Registry)
-    needs: [build-image]
+    needs: [build-image, quality-gate]
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || startsWith(github.ref, 'refs/heads/release/')
     runs-on: ubuntu-latest
     steps:
