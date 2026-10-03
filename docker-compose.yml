@@ -20,7 +20,7 @@ services:
       - KAFKA_NUM_PARTITIONS=1
 
   minio:
-    image: bitnami/minio:latest
+    image: quay.io/minio/minio:latest
     ports:
       - "9000:9000"
       - "9001:9001"
