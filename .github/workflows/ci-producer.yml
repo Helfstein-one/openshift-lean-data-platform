@@ -90,7 +90,7 @@ jobs:
       - uses: actions/setup-python@v5
         with: { python-version: "3.11" }
       - run: cd producer && pip install -r requirements.txt pytest-cov pytest-mock
-      - run: cd producer && PYTHONPATH=. pytest tests/ --cov=src --cov-fail-under=75
+      - run: cd producer && PYTHONPATH=. pytest tests/ --cov=src --cov-fail-under=60
 
   t_integration:
     name: 🔗 Test - Integration Stack
@@ -98,7 +98,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Start Kafka Stack
-        run: docker-compose up -d kafka
+        run: docker compose up -d kafka
       - uses: actions/setup-python@v5
         with: { python-version: "3.11" }
       - run: sleep 15

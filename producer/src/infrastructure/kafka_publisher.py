@@ -2,12 +2,14 @@ import json
 import logging
 import sys
 import time
-from typing import Dict, Any
+from typing import Any, Dict
+
 from kafka import KafkaProducer
 from kafka.errors import NoBrokersAvailable
 from src.application.ports import MessagePublisher
 
 logger = logging.getLogger(__name__)
+
 
 class KafkaMessagePublisher(MessagePublisher):
     def __init__(self, bootstrap_servers: str):
@@ -18,9 +20,15 @@ class KafkaMessagePublisher(MessagePublisher):
             try:
                 p = KafkaProducer(
                     bootstrap_servers=bootstrap_servers.split(","),
-                    value_serializer=lambda v: json.dumps(v, ensure_ascii=False).encode("utf-8"),
+                    value_serializer=lambda v: json.dumps(v, ensure_ascii=False).encode(
+                        "utf-8"
+                    ),
                     key_serializer=lambda k: str(k).encode("utf-8"),
-                    acks=1, retries=3, batch_size=16384, linger_ms=50, compression_type="gzip"
+                    acks=1,
+                    retries=3,
+                    batch_size=16384,
+                    linger_ms=50,
+                    compression_type="gzip",
                 )
                 logger.info("Kafka conectado com sucesso.")
                 return p

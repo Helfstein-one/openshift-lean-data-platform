@@ -1,6 +1,8 @@
 import time
-from src.domain.generators import EventGenerator
+
 from src.application.ports import MessagePublisher
+from src.domain.generators import EventGenerator
+
 
 class ProduceEventsUseCase:
     def __init__(self, publisher: MessagePublisher, topic: str, interval: float):
@@ -18,7 +20,7 @@ class ProduceEventsUseCase:
                 "source": "core.banking.stream",
                 "partition_key": event.partition_key,
                 "timestamp_utc": event.timestamp_utc,
-                "data": event.payload
+                "data": event.payload,
             }
             self.publisher.publish(self.topic, event.partition_key, envelope)
             time.sleep(self.interval)

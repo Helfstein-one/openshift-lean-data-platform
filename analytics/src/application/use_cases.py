@@ -1,6 +1,7 @@
 from src.application.ports import DataReader, DataWriter
 from src.domain.financial import AccountingNormalizer, FinancialAggregator
 
+
 class ETLUseCase:
     def __init__(self, reader: DataReader, writer: DataWriter):
         self.reader = reader
