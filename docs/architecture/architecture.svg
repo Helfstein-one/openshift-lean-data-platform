@@ -1,0 +1,162 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 680" width="100%" height="100%" style="background-color: #0d1117; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+  <defs>
+    <linearGradient id="ocpGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#161b22" />
+      <stop offset="100%" stop-color="#0d1117" />
+    </linearGradient>
+    <linearGradient id="podGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#21262d" />
+      <stop offset="100%" stop-color="#161b22" />
+    </linearGradient>
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="110%">
+      <feDropShadow dx="0" dy="8" stdDeviation="6" flood-color="#000000" flood-opacity="0.5"/>
+    </filter>
+    <marker id="arrow" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#58a6ff" />
+    </marker>
+    <marker id="arrow-green" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#3fb950" />
+    </marker>
+    <marker id="arrow-orange" viewBox="0 0 10 10" refX="5" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#d29922" />
+    </marker>
+  </defs>
+
+  <!-- OpenShift CRC Container Box -->
+  <rect x="30" y="30" width="1040" height="620" rx="16" fill="url(#ocpGrad)" stroke="#ee0000" stroke-width="2.5" filter="url(#shadow)" stroke-dasharray="8 6"/>
+  
+  <!-- Cluster Header -->
+  <g transform="translate(60, 65)">
+    <rect x="0" y="0" width="32" height="32" rx="6" fill="#ee0000"/>
+    <text x="16" y="22" font-size="20" font-weight="900" fill="#ffffff" text-anchor="middle">O</text>
+    <text x="46" y="18" font-size="16" font-weight="700" fill="#f0f6fc">Red Hat OpenShift Local (CRC) — Single Node Cluster</text>
+    <text x="46" y="34" font-size="12" fill="#8b949e">Memória Física: 10.2 GB Alocável | CPU: Apple Silicon M-Series | Kernel Linux 5.14+</text>
+  </g>
+
+  <!-- Namespace Badge -->
+  <g transform="translate(860, 65)">
+    <rect x="0" y="0" width="180" height="30" rx="6" fill="#326ce5" opacity="0.2"/>
+    <rect x="0" y="0" width="180" height="30" rx="6" fill="none" stroke="#326ce5" stroke-width="1.5"/>
+    <text x="90" y="20" font-size="12" font-weight="600" fill="#58a6ff" text-anchor="middle">Namespace: data-platform</text>
+  </g>
+
+  <!-- Pipeline Flow Containers -->
+
+  <!-- 1. Producer Box -->
+  <g transform="translate(60, 130)">
+    <rect x="0" y="0" width="220" height="180" rx="12" fill="url(#podGrad)" stroke="#306998" stroke-width="2" filter="url(#shadow)"/>
+    <rect x="16" y="16" width="36" height="36" rx="8" fill="#306998"/>
+    <text x="34" y="40" font-size="20" fill="#ffd43b" text-anchor="middle">🐍</text>
+    <text x="64" y="32" font-size="14" font-weight="700" fill="#f0f6fc">Core Producer</text>
+    <text x="64" y="48" font-size="11" fill="#8b949e">Python 3.11 • Hexagonal</text>
+    
+    <text x="16" y="85" font-size="11" fill="#c9d1d9">• Emissão de Contratos</text>
+    <text x="16" y="105" font-size="11" fill="#c9d1d9">• Pagamentos &amp; PIX</text>
+    <text x="16" y="125" font-size="11" fill="#c9d1d9">• Estornos &amp; Disputas MED</text>
+    
+    <rect x="16" y="145" width="188" height="20" rx="4" fill="#21262d"/>
+    <text x="110" y="159" font-size="10" fill="#8b949e" text-anchor="middle">SCC: restricted-v2 (Non-root)</text>
+  </g>
+
+  <!-- Arrow Producer -> Kafka -->
+  <path d="M 280 220 L 330 220" fill="none" stroke="#58a6ff" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <text x="305" y="210" font-size="10" font-weight="600" fill="#58a6ff" text-anchor="middle">JSON Stream</text>
+
+  <!-- 2. Kafka KRaft Box -->
+  <g transform="translate(340, 130)">
+    <rect x="0" y="0" width="220" height="180" rx="12" fill="url(#podGrad)" stroke="#ffffff" stroke-width="1.5" filter="url(#shadow)"/>
+    <rect x="16" y="16" width="36" height="36" rx="8" fill="#231f20" stroke="#484f58" stroke-width="1"/>
+    <text x="34" y="40" font-size="18" fill="#ffffff" text-anchor="middle">🦇</text>
+    <text x="64" y="32" font-size="14" font-weight="700" fill="#f0f6fc">Strimzi Kafka</text>
+    <text x="64" y="48" font-size="11" fill="#8b949e">Apache Kafka 3.7 (KRaft)</text>
+    
+    <text x="16" y="85" font-size="11" fill="#c9d1d9">• Zero ZooKeeper (Quorum)</text>
+    <text x="16" y="105" font-size="11" fill="#c9d1d9">• Topic: financial-events</text>
+    <text x="16" y="125" font-size="11" fill="#c9d1d9">• Partições por Cliente ID</text>
+    
+    <rect x="16" y="145" width="188" height="20" rx="4" fill="#21262d"/>
+    <text x="110" y="159" font-size="10" fill="#3fb950" text-anchor="middle">Memory Request: 600Mi</text>
+  </g>
+
+  <!-- Arrow Kafka -> MinIO -->
+  <path d="M 560 220 L 610 220" fill="none" stroke="#58a6ff" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <text x="585" y="210" font-size="10" font-weight="600" fill="#58a6ff" text-anchor="middle">S3 Ingestion</text>
+
+  <!-- 3. MinIO S3 Lake Box -->
+  <g transform="translate(620, 130)">
+    <rect x="0" y="0" width="220" height="180" rx="12" fill="url(#podGrad)" stroke="#c72e49" stroke-width="2" filter="url(#shadow)"/>
+    <rect x="16" y="16" width="36" height="36" rx="8" fill="#c72e49"/>
+    <text x="34" y="40" font-size="18" fill="#ffffff" text-anchor="middle">🪣</text>
+    <text x="64" y="32" font-size="14" font-weight="700" fill="#f0f6fc">MinIO Lakehouse</text>
+    <text x="64" y="48" font-size="11" fill="#8b949e">S3 Object Store (Raw Zone)</text>
+    
+    <text x="16" y="85" font-size="11" fill="#c9d1d9">• Bucket: raw-financial-lake</text>
+    <text x="16" y="105" font-size="11" fill="#c9d1d9">• Partição: year/month/day</text>
+    <text x="16" y="125" font-size="11" fill="#c9d1d9">• PVC: 1Gi ReadWriteOnce</text>
+    
+    <rect x="16" y="145" width="188" height="20" rx="4" fill="#21262d"/>
+    <text x="110" y="159" font-size="10" fill="#8b949e" text-anchor="middle">Console: :9001 | API: :9000</text>
+  </g>
+
+  <!-- 4. Spark CronJob (Below MinIO/Kafka) -->
+  <g transform="translate(340, 390)">
+    <rect x="0" y="0" width="220" height="210" rx="12" fill="url(#podGrad)" stroke="#e25a1c" stroke-width="2" filter="url(#shadow)"/>
+    <rect x="16" y="16" width="36" height="36" rx="8" fill="#e25a1c"/>
+    <text x="34" y="40" font-size="18" fill="#ffffff" text-anchor="middle">✨</text>
+    <text x="64" y="32" font-size="14" font-weight="700" fill="#f0f6fc">Apache Spark</text>
+    <text x="64" y="48" font-size="11" fill="#8b949e">PySpark K8s CronJob</text>
+    
+    <text x="16" y="85" font-size="11" fill="#c9d1d9">• Agendamento: */2 * * * *</text>
+    <text x="16" y="105" font-size="11" fill="#c9d1d9">• Pod Efêmero (Auto-kill)</text>
+    <text x="16" y="125" font-size="11" fill="#c9d1d9">• Reversibilidade Contábil</text>
+    <text x="16" y="145" font-size="11" fill="#c9d1d9">• Agrupamento por Competência</text>
+    
+    <rect x="16" y="170" width="188" height="22" rx="4" fill="#21262d"/>
+    <text x="110" y="185" font-size="10" fill="#d29922" text-anchor="middle">SCC: anyuid (spark-sa)</text>
+  </g>
+
+  <!-- Arrow MinIO down-left to Spark -->
+  <path d="M 730 310 L 730 350 L 570 350 L 570 450" fill="none" stroke="#d29922" stroke-width="2.5" marker-end="url(#arrow-orange)"/>
+  <text x="645" y="342" font-size="10" font-weight="600" fill="#d29922" text-anchor="middle">Batch Read (S3A Protocol)</text>
+
+  <!-- Arrow Spark right to Postgres -->
+  <path d="M 560 495 L 610 495" fill="none" stroke="#3fb950" stroke-width="2.5" marker-end="url(#arrow-green)"/>
+  <text x="585" y="485" font-size="10" font-weight="600" fill="#3fb950" text-anchor="middle">JDBC Write</text>
+
+  <!-- 5. PostgreSQL Data Mart Box -->
+  <g transform="translate(620, 390)">
+    <rect x="0" y="0" width="200" height="210" rx="12" fill="url(#podGrad)" stroke="#336791" stroke-width="2" filter="url(#shadow)"/>
+    <rect x="16" y="16" width="36" height="36" rx="8" fill="#336791"/>
+    <text x="34" y="40" font-size="18" fill="#ffffff" text-anchor="middle">🐘</text>
+    <text x="64" y="32" font-size="14" font-weight="700" fill="#f0f6fc">PostgreSQL 14</text>
+    <text x="64" y="48" font-size="11" fill="#8b949e">Bitnami Helm Chart</text>
+    
+    <text x="16" y="85" font-size="11" fill="#c9d1d9">• Tabela: faturamento_contabil</text>
+    <text x="16" y="105" font-size="11" fill="#c9d1d9">• Saldo Líquido Real</text>
+    <text x="16" y="125" font-size="11" fill="#c9d1d9">• Contagem de Estornos</text>
+    
+    <rect x="16" y="170" width="168" height="22" rx="4" fill="#21262d"/>
+    <text x="100" y="185" font-size="10" fill="#d29922" text-anchor="middle">SCC: anyuid (UID 1001)</text>
+  </g>
+
+  <!-- Arrow Postgres to Superset -->
+  <path d="M 820 495 L 870 495" fill="none" stroke="#58a6ff" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <text x="845" y="485" font-size="10" font-weight="600" fill="#58a6ff" text-anchor="middle">SQL Query</text>
+
+  <!-- 6. Apache Superset Box -->
+  <g transform="translate(880, 390)">
+    <rect x="0" y="0" width="160" height="210" rx="12" fill="url(#podGrad)" stroke="#00a699" stroke-width="2" filter="url(#shadow)"/>
+    <rect x="16" y="16" width="36" height="36" rx="8" fill="#00a699"/>
+    <text x="34" y="40" font-size="18" fill="#ffffff" text-anchor="middle">📊</text>
+    <text x="60" y="32" font-size="14" font-weight="700" fill="#f0f6fc">Superset</text>
+    <text x="60" y="48" font-size="11" fill="#8b949e">BI Dashboards</text>
+    
+    <text x="16" y="85" font-size="11" fill="#c9d1d9">• Cards Financeiros</text>
+    <text x="16" y="105" font-size="11" fill="#c9d1d9">• Taxa Reversão PIX</text>
+    <text x="16" y="125" font-size="11" fill="#c9d1d9">• Carteira Crédito</text>
+    
+    <rect x="16" y="170" width="128" height="22" rx="4" fill="#21262d"/>
+    <text x="80" y="185" font-size="10" fill="#58a6ff" text-anchor="middle">Porta 8088 / Route</text>
+  </g>
+
+</svg>

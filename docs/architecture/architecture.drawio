@@ -1,0 +1,102 @@
+<mxfile host="app.diagrams.net" modified="2026-10-03T21:26:00.000Z" agent="Mozilla/5.0" version="21.0.0" type="device">
+  <diagram id="architecture-diagram" name="Data Platform Architecture">
+    <mxGraphModel dx="1200" dy="800" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1169" pageHeight="827" background="#F8FAFC">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+        
+        <!-- OpenShift CRC Boundary -->
+        <mxCell id="crc-boundary" value="Red Hat OpenShift Local (CRC) / Single-Node Kubernetes Cluster" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;align=left;spacingLeft=20;spacingTop=15;fillColor=#F1F5F9;strokeColor=#EE0000;strokeWidth=2;dashed=1;fontStyle=1;fontSize=14;fontColor=#1E293B;" vertex="1" parent="1">
+          <mxGeometry x="40" y="40" width="1080" height="740" as="geometry"/>
+        </mxCell>
+
+        <!-- Namespace data-platform -->
+        <mxCell id="ns-boundary" value="Namespace: data-platform" style="rounded=1;whiteSpace=wrap;html=1;verticalAlign=top;align=left;spacingLeft=15;spacingTop=10;fillColor=#FFFFFF;strokeColor=#326CE5;strokeWidth=2;fontSize=12;fontStyle=1;fontColor=#0F172A;" vertex="1" parent="1">
+          <mxGeometry x="70" y="90" width="1020" height="660" as="geometry"/>
+        </mxCell>
+
+        <!-- Ingestion Layer Box -->
+        <mxCell id="layer-ingestion" value="1. CAMADA DE INGESTÃO (Event-Driven)" style="swimlane;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#94A3B8;fontSize=12;fontStyle=1;fontColor=#334155;startSize=30;" vertex="1" parent="1">
+          <mxGeometry x="100" y="140" width="450" height="260" as="geometry"/>
+        </mxCell>
+
+        <!-- Producer Pod -->
+        <mxCell id="pod-producer" value="&lt;b&gt;Financial Core Producer&lt;/b&gt;&lt;br/&gt;Deployment (Python 3.11)&lt;br/&gt;&lt;i&gt;Arquitetura Hexagonal&lt;/i&gt;&lt;br/&gt;SCC: restricted / non-root" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#306998;strokeColor=#FFD43B;strokeWidth=2;fontColor=#FFFFFF;fontSize=11;" vertex="1" parent="layer-ingestion">
+          <mxGeometry x="30" y="60" width="170" height="90" as="geometry"/>
+        </mxCell>
+
+        <!-- Kafka Pod / Strimzi -->
+        <mxCell id="pod-kafka" value="&lt;b&gt;Apache Kafka Cluster&lt;/b&gt;&lt;br/&gt;Strimzi Operator (KRaft)&lt;br/&gt;Topic: financial-events&lt;br/&gt;Zero ZooKeeper" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#231F20;strokeColor=#FFFFFF;strokeWidth=2;fontColor=#FFFFFF;fontSize=11;" vertex="1" parent="layer-ingestion">
+          <mxGeometry x="250" y="60" width="170" height="90" as="geometry"/>
+        </mxCell>
+
+        <!-- Connect Sink -->
+        <mxCell id="sink-desc" value="Kafka Connect / S3 Sink&lt;br/&gt;Buffered Micro-batch Commit" style="shape=process;whiteSpace=wrap;html=1;backgroundOutline=1;fillColor=#E2E8F0;strokeColor=#64748B;fontSize=10;fontColor=#0F172A;" vertex="1" parent="layer-ingestion">
+          <mxGeometry x="140" y="190" width="180" height="50" as="geometry"/>
+        </mxCell>
+
+        <!-- Storage & Lake Layer Box -->
+        <mxCell id="layer-lake" value="2. CAMADA DE STORAGE (Object Store Lakehouse)" style="swimlane;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#94A3B8;fontSize=12;fontStyle=1;fontColor=#334155;startSize=30;" vertex="1" parent="1">
+          <mxGeometry x="600" y="140" width="460" height="260" as="geometry"/>
+        </mxCell>
+
+        <!-- MinIO Pod -->
+        <mxCell id="pod-minio" value="&lt;b&gt;MinIO S3 Object Store&lt;/b&gt;&lt;br/&gt;PVC: 1Gi (ReadWriteOnce)&lt;br/&gt;Bucket: raw-financial-lake&lt;br/&gt;Partition: year=YYYY/month=MM" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#C72E49;strokeColor=#FFFFFF;strokeWidth=2;fontColor=#FFFFFF;fontSize=11;" vertex="1" parent="layer-lake">
+          <mxGeometry x="40" y="60" width="180" height="90" as="geometry"/>
+        </mxCell>
+
+        <!-- Processing Layer Box -->
+        <mxCell id="layer-processing" value="3. PROCESSAMENTO ANALÍTICO &amp; CONTÁBIL (Batch / Spark)" style="swimlane;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#94A3B8;fontSize=12;fontStyle=1;fontColor=#334155;startSize=30;" vertex="1" parent="1">
+          <mxGeometry x="100" y="440" width="450" height="280" as="geometry"/>
+        </mxCell>
+
+        <!-- Spark CronJob Pod -->
+        <mxCell id="pod-spark" value="&lt;b&gt;Apache Spark (PySpark)&lt;/b&gt;&lt;br/&gt;K8s CronJob: */2 * * * *&lt;br/&gt;Pod Efêmero (600Mi RAM)&lt;br/&gt;Reversibilidade Contábil&lt;br/&gt;SCC: anyuid (spark-sa)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E25A1C;strokeColor=#FFFFFF;strokeWidth=2;fontColor=#FFFFFF;fontSize=11;" vertex="1" parent="layer-processing">
+          <mxGeometry x="130" y="60" width="200" height="100" as="geometry"/>
+        </mxCell>
+
+        <!-- Serving & BI Layer Box -->
+        <mxCell id="layer-serving" value="4. DATA MART &amp; VISUALIZAÇÃO" style="swimlane;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#94A3B8;fontSize=12;fontStyle=1;fontColor=#334155;startSize=30;" vertex="1" parent="1">
+          <mxGeometry x="600" y="440" width="460" height="280" as="geometry"/>
+        </mxCell>
+
+        <!-- PostgreSQL Pod -->
+        <mxCell id="pod-postgres" value="&lt;b&gt;PostgreSQL 14 (Bitnami)&lt;/b&gt;&lt;br/&gt;Data Mart Analítico&lt;br/&gt;Tabela: faturamento_contabil&lt;br/&gt;SCC: anyuid (UID 1001)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#336791;strokeColor=#FFFFFF;strokeWidth=2;fontColor=#FFFFFF;fontSize=11;" vertex="1" parent="layer-serving">
+          <mxGeometry x="40" y="60" width="180" height="90" as="geometry"/>
+        </mxCell>
+
+        <!-- Superset Pod -->
+        <mxCell id="pod-superset" value="&lt;b&gt;Apache Superset&lt;/b&gt;&lt;br/&gt;Helm Deployment Lean&lt;br/&gt;Dashboards de Crédito, PIX&lt;br/&gt;e Disputas MED" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#00A699;strokeColor=#FFFFFF;strokeWidth=2;fontColor=#FFFFFF;fontSize=11;" vertex="1" parent="layer-serving">
+          <mxGeometry x="250" y="60" width="180" height="90" as="geometry"/>
+        </mxCell>
+
+        <!-- Edges / Fluxo de Dados -->
+        <mxCell id="edge-1" value="Publica JSON" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#334155;strokeWidth=2;fontColor=#1E293B;fontSize=10;" edge="1" source="pod-producer" target="pod-kafka" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="edge-2" value="S3 Ingestion" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#334155;strokeWidth=2;fontColor=#1E293B;fontSize=10;" edge="1" source="pod-kafka" target="pod-minio" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="edge-3" value="Leitura S3A (PySpark)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#E25A1C;strokeWidth=2;fontColor=#1E293B;fontSize=10;" edge="1" source="pod-minio" target="pod-spark" parent="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="730" y="420"/>
+              <mxPoint x="330" y="420"/>
+            </Array>
+          </mxGeometry>
+        </mxCell>
+
+        <mxCell id="edge-4" value="Gravação JDBC" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#336791;strokeWidth=2;fontColor=#1E293B;fontSize=10;" edge="1" source="pod-spark" target="pod-postgres" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="edge-5" value="SQL Query" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#00A699;strokeWidth=2;fontColor=#1E293B;fontSize=10;" edge="1" source="pod-postgres" target="pod-superset" parent="1">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
