@@ -12,72 +12,164 @@ O diagrama abaixo ilustra a jornada completa do dado desde a geração do evento
 
 > **Arquivo Editável:** O diagrama com todas as conexões, metadados e camadas está disponível no padrão Draw.io em [`docs/architecture/architecture.drawio`](docs/architecture/architecture.drawio).
 
-### Diagrama de Fluxo e Componentes (Mermaid)
+### 🔀 Diagrama de Fluxo e Componentes Paralelizado (Mermaid)
+
+Para facilitar a compreensão do paralelismo do sistema, o fluxo abaixo modela as vias simultâneas de eventos, o isolamento dos workers de processamento e a concorrência entre persistência contábil e consulta analítica:
 
 ```mermaid
-flowchart TD
+flowchart LR
     classDef producer fill:#306998,stroke:#FFD43B,stroke-width:2px,color:white;
     classDef kafka fill:#231F20,stroke:#white,stroke-width:2px,color:white;
     classDef minio fill:#C72E49,stroke:#white,stroke-width:2px,color:white;
     classDef spark fill:#E25A1C,stroke:#white,stroke-width:2px,color:white;
     classDef postgres fill:#336791,stroke:#white,stroke-width:2px,color:white;
     classDef superset fill:#00A699,stroke:#white,stroke-width:2px,color:white;
-    classDef ocp fill:#1E293B,stroke:#EE0000,stroke-width:2px,color:white;
+    classDef boundary fill:#0F172A,stroke:#3B82F6,stroke-width:2px,stroke-dasharray: 4 4,color:white;
 
-    subgraph Cluster ["Red Hat OpenShift Local / CRC (Namespace: data-platform)"]
+    subgraph CoreBanking ["🐍 Ingestão Transacional Paralela"]
         direction TB
-
-        subgraph Ingestion ["1. Ingestão & Mensageria"]
-            Producer["🐍 Financial Core Producer\n(Python 3.11 / Hexagonal)"]:::producer
-            Kafka["🦇 Apache Kafka 3.7\n(Strimzi Operator KRaft)"]:::kafka
-        end
-
-        subgraph Storage ["2. Armazenamento Lakehouse"]
-            MinIO["🪣 MinIO S3 Object Store\n(Raw Landing Zone - 1Gi PVC)"]:::minio
-        end
-
-        subgraph Compute ["3. Processamento Contábil"]
-            Spark["✨ Apache Spark Driver\n(PySpark Efêmero CronJob */2)"]:::spark
-        end
-
-        subgraph Serving ["4. Data Mart & Visualização"]
-            Postgres["🐘 PostgreSQL 14\n(Data Mart Contábil)"]:::postgres
-            Superset["📊 Apache Superset\n(Dashboards de Crédito / MED)"]:::superset
-        end
-
-        Producer -->|"1. Produz Eventos JSON"| Kafka
-        Kafka -->|"2. Micro-batch S3 Ingestion"| MinIO
-        MinIO -->|"3. Leitura Batch S3A"| Spark
-        Spark -->|"4. Gravação JDBC (Reversibilidade)"| Postgres
-        Postgres -->|"5. Queries SQL Analíticas"| Superset
+        E1["📄 Contratos & Empréstimos"]:::producer
+        E2["⚡ Transações PIX"]:::producer
+        E3["💳 Pagamentos de Parcelas"]:::producer
+        E4["↩️ Estornos & MED"]:::producer
     end
+
+    subgraph KafkaStream ["🦇 Particionamento Kafka (KRaft)"]
+        direction TB
+        P0["Partição 0 (Clientes Hash A-G)"]:::kafka
+        P1["Partição 1 (Clientes Hash H-P)"]:::kafka
+        P2["Partição 2 (Clientes Hash Q-Z)"]:::kafka
+    end
+
+    subgraph StorageLake ["🪣 Lakehouse S3 (MinIO)"]
+        direction TB
+        B1["raw-financial-lake/year=2026/month=10/"]:::minio
+    end
+
+    subgraph SparkParallel ["✨ PySpark Executors Paralelos (CronJob)"]
+        direction TB
+        W1["Worker 1: Normalização de Contratos e PIX"]:::spark
+        W2["Worker 2: Reversibilidade Contábil de Estornos"]:::spark
+    end
+
+    subgraph ServingDW ["🐘 Data Mart & BI"]
+        direction TB
+        PG[("PostgreSQL 14\nfaturamento_contabil")]:::postgres
+        BI["📊 Superset Dashboards\nConsultas Analíticas"]:::superset
+    end
+
+    %% Conexões do Paralelismo de Ingestão
+    E1 --> P0
+    E2 --> P1
+    E3 --> P2
+    E4 --> P0
+    E4 --> P1
+
+    %% Conexão Kafka -> MinIO
+    P0 -->|"S3 Sink Connector"| B1
+    P1 -->|"S3 Sink Connector"| B1
+    P2 -->|"S3 Sink Connector"| B1
+
+    %% Leitura Paralela Spark
+    B1 ==>|"Leitura Particionada S3A"| W1
+    B1 ==>|"Leitura Particionada S3A"| W2
+
+    %% Agregação e Escrita / Leitura
+    W1 -->|"Consolidação JDBC"| PG
+    W2 -->|"Consolidação JDBC"| PG
+    PG -->|"SQL Queries"| BI
 ```
 
 ---
 
-## ⚙️ 2. Como Funciona o OpenShift e o Kubernetes?
+## 🏛️ 2. Guia Profundo e Didático: Kubernetes vs OpenShift
 
-O **Kubernetes (K8s)** é o motor de orquestração padrão da indústria:
-- Ele gerencia o ciclo de vida dos contêineres (**Pods**), agendamento nos nós do cluster, balanceamento de rede (**Services**), pontos de persistência (**PersistentVolumeClaims**) e tarefas agendadas (**CronJobs**).
+Para entender o funcionamento da plataforma neste cluster local, é essencial compreender o papel do Kubernetes e como o Red Hat OpenShift expande suas capacidades para ambientes corporativos.
 
-O **Red Hat OpenShift** é uma distribuição empresarial construída **em cima** do Kubernetes, adicionando camadas fundamentais de governança corporativa:
-1. **Security Context Constraints (SCC):** Diferente do Kubernetes padrão que roda contêineres como root se não houver restrição, o OpenShift bloqueia UIDs fixos e execução root por padrão através da SCC `restricted-v2`. Imagens tradicionais (como Bitnami PostgreSQL com UID 1001 ou Spark driver) necessitam da SCC `anyuid` atribuída à sua respectiva `ServiceAccount`.
-2. **Operators (OLM):** O OpenShift utiliza operadores nativos para orquestrar serviços complexos. O Kafka nesta plataforma é gerenciado pelo operador corporativo **Strimzi**, que abstrai nós, listeners e tópicos através de Custom Resource Definitions (CRDs).
-3. **Ingress e Routes:** Em vez de depender apenas de Ingress controllers genéricos, o OpenShift fornece recursos nativos de `Route` com terminação TLS automática integrada ao roteador HAProxy do cluster.
+### 2.1 O que é o Kubernetes (K8s)?
+O **Kubernetes** é o maestro de orquestração de contêineres. Ele resolve o desafio de gerenciar aplicações distribuídas de forma declarativa:
+- **Pod:** A menor unidade de execução. Pode conter um ou mais contêineres compartilhando o mesmo namespace de rede (IP e localhost) e volumes de armazenamento.
+- **Deployment / ReplicaSet:** Garante que um número especificado de réplicas de um Pod esteja sempre saudável e em execução. Se um contêiner cair, o nó subir outro automaticamente (*Self-healing*).
+- **Service:** Um ponto estável de rede (DNS interno e IP virtual) que balanceia requisições entre os Pods daquele serviço.
+- **PersistentVolume (PV) e PVC:** Abstração de armazenamento persistente. O Pod requisita armazenamento via `PersistentVolumeClaim` (PVC), desacoplando a infraestrutura física de storage do ciclo de vida efêmero do contêiner.
+
+### 2.2 O que é o Red Hat OpenShift?
+O **Red Hat OpenShift** é uma distribuição empresarial completa do Kubernetes. Ele não substitui o Kubernetes: **ele é o Kubernetes em seu núcleo**, complementado por camadas enterprise pré-configuradas e validadas:
+
+```mermaid
+flowchart TD
+    classDef k8sCore fill:#326CE5,stroke:#FFFFFF,stroke-width:2px,color:white;
+    classDef ocpLayer fill:#EE0000,stroke:#FFFFFF,stroke-width:2px,color:white;
+    classDef base fill:#1E293B,stroke:#64748B,stroke-width:2px,color:white;
+
+    subgraph OS ["Infraestrutura Base"]
+        RHCOS["Red Hat Enterprise Linux CoreOS (RHCOS) / Kernel Seguro"]:::base
+    end
+
+    subgraph K8S ["Núcleo Kubernetes (Padrão CNCF)"]
+        API["kube-apiserver • etcd • kube-scheduler • kubelet • kube-proxy"]:::k8sCore
+    end
+
+    subgraph OCP ["Camadas de Valor Adicionadas pelo OpenShift"]
+        direction TB
+        SCC["🔐 Security Context Constraints (SCC) • Proteção de Execução Root"]:::ocpLayer
+        OLM["📦 Operator Lifecycle Manager (OLM) • Gestão Automatizada de Operadores"]:::ocpLayer
+        ROUTER["🌐 OpenShift Router (HAProxy) • Ingress com Routes Nativas & TLS"]:::ocpLayer
+        BUILD["🔨 Source-to-Image (S2I) & Integrated Container Registry"]:::ocpLayer
+        CONSOLE["🖥️ Web Console Integrado com Métricas e Topologia Visual"]:::ocpLayer
+    end
+
+    RHCOS --> K8S
+    K8S --> OCP
+```
+
+### 2.3 Comparativo Prático: Onde o OpenShift se Diferencia no Projeto?
+
+| Funcionalidade | Kubernetes Vanilla | Red Hat OpenShift (Nosso Projeto) |
+| :--- | :--- | :--- |
+| **Segurança Padrão** | Contêiner roda como `root` se o Dockerfile declarar `USER root`. | Bloqueio automático por **SCC `restricted-v2`**. É obrigatório vincular a SCC `anyuid` para imagens como Postgres (Bitnami UID 1001) e Spark. |
+| **Operadores** | Instalação manual de CRDs e controladores via manifests ou Helm. | **Operator Lifecycle Manager (OLM)** nativo. O Kafka é mantido e auto-recuperado pelo operador oficial **Strimzi**. |
+| **Exposição Externa** | Exige configuração de Ingress Controllers adicionais (ex: Nginx Ingress). | Recurso nativo **`Route`** apontando para o router HAProxy, gerando URLs corporativas como `*.apps-crc.testing`. |
+| **Gerenciamento de Nó** | Distribuição Linux genérica (Ubuntu, Debian, Alpine). | **Red Hat CoreOS (RHCOS)** com sistema de arquivos imutável e atualizações atomizadas. |
 
 ---
 
 ## 💻 3. Como o OpenShift Roda Localmente (CRC)
 
-O **OpenShift Local (CodeReady Containers - CRC)** provisiona uma máquina virtual Linux minimalista (via Hypervisor macOS) rodando um nó único (*All-in-One: Master + Worker*) com o Red Hat Enterprise Linux CoreOS (RHCOS).
+O **OpenShift Local (anteriormente CodeReady Containers - CRC)** roda um cluster OpenShift completo de nó único dentro de uma Máquina Virtual (Hypervisor macOS / Apple Hypervisor Framework).
 
-### O Desafio de Memória em 16GB RAM:
-O nó do CRC disponibiliza aproximadamente **10.2 GB de memória alocável**. O próprio Control Plane do OpenShift (ETCD, API Server, DNS, Ingress, CVO) consome quase 100% dessa capacidade se deixado na configuração padrão.
+```mermaid
+flowchart TD
+    classDef host fill:#0F172A,stroke:#64748B,stroke-width:2px,color:white;
+    classDef vm fill:#1E293B,stroke:#EE0000,stroke-width:2px,color:white;
+    classDef app fill:#334155,stroke:#3B82F6,stroke-width:2px,color:white;
 
-Para viabilizar a plataforma de dados, aplicamos a estratégia de **"Orçamento Cirúrgico de Recursos"**:
-- **Desativação de Operadores Pesados:** Escalonamos para zero o `cluster-version-operator`, operadores de monitoramento do cluster (`openshift-monitoring`), catálogo e registry interno.
-- **Pods Efêmeros:** Em vez de manter um cluster Spark dedicado consumindo memória continuamente, o processamento ocorre via **Kubernetes CronJob**. O Pod do PySpark sobe, processa os dados da janela de tempo, grava no Postgres e morre, devolvendo a memória imediatamente ao cluster.
-- **Kafka KRaft:** Eliminamos o Apache ZooKeeper, reduzindo o consumo de memória do Kafka para apenas 600MiB.
+    subgraph Mac ["Host Físico: Apple Silicon (Mac M-Series - 16GB RAM)"]
+        direction TB
+        OSX["macOS Sequoia / Sonoma"]:::host
+        
+        subgraph VM ["OpenShift Local VM (CRC) — 10.2GB RAM Alocável"]
+            direction TB
+            MasterWorker["Nó Único: Master + Worker Integrados (RHCOS)"]:::vm
+            
+            subgraph DataPlat ["Namespace: data-platform (Orçamento Cirúrgico de Memória)"]
+                KAFKA["Kafka KRaft (600Mi)"]:::app
+                MINIO["MinIO S3 (256Mi)"]:::app
+                POSTGRES["Postgres 14 (300Mi)"]:::app
+                SPARK["Spark CronJob Efêmero (600Mi - Auto-Kill)"]:::app
+                SUPERSET["Superset Web (600Mi)"]:::app
+            end
+        end
+    end
+
+    OSX -->|"crc start / oc CLI"| VM
+```
+
+### O Desafio de Recursos e o "Orçamento Cirúrgico de Memória"
+Em uma máquina de 16GB, o nó do CRC dispõe de aproximadamente **10.2 GB de memória alocável**. Os operadores de infraestrutura padrão do OpenShift consomem sozinhos quase a totalidade dessa cota:
+1. **Desativação de Operadores Secundários:** O operador de monitoramento do cluster (`openshift-monitoring`), o catálogo de mercado (`marketplace`) e o atualizador de cluster (`cluster-version-operator`) foram escalados para 0 réplicas.
+2. **Kafka sem ZooKeeper (KRaft):** Eliminamos o ZooKeeper do Apache Kafka, reduzindo o consumo de memória de mensageria em mais de 60%.
+3. **Computação Efêmera (Serverless Batch):** Em vez de manter um cluster Spark Standalone ligado 24/7 consumindo RAM, usamos **Kubernetes CronJobs**. O contêiner do PySpark sobe a cada 2 horas, processa a partição de dados do MinIO, grava no Postgres e finaliza (`Completed`), liberando seus 600MiB de RAM imediatamente de volta para a VM.
 
 ---
 
