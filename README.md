@@ -8,7 +8,8 @@ Uma plataforma de dados bancária e analítica de ponta a ponta, nativa em cont�
 
 O diagrama abaixo ilustra a jornada completa do dado desde a geração do evento transacional no Core Banking até a camada analítica de apresentação no Superset, operando sob o isolamento de segurança e restrição de recursos do cluster.
 
-![Arquitetura da Plataforma de Dados](docs/architecture/architecture.svg)
+![Arquitetura da Plataforma de Dados](docs/architecture/openshift_data_platform_arch.jpg)
+![Diagrama Vetorial da Arquitetura](docs/architecture/architecture.svg)
 
 > 🎮 **Diagrama Interativo (Web Inspector):** Inspecione componentes, restrições K8s e fluxos clicáveis em [`docs/architecture/architecture_interactive.html`](docs/architecture/architecture_interactive.html).
 >
