@@ -56,6 +56,8 @@ def test_normalize_and_aggregate(spark):
 
 
 def test_data_quality_success(spark):
+    from datetime import date
+
     schema = StructType(
         [
             StructField("data_contabil", DateType(), True),
@@ -67,14 +69,7 @@ def test_data_quality_success(spark):
             StructField("qtd_total_transacoes", LongType(), True),
         ]
     )
-    data = [
-        (
-            None,  # will be converted to date via spark if parsed, but using string in dict/tuple
-        )
-    ]
     # Standard valid row
-    from datetime import date
-
     valid_data = [(date(2026, 10, 1), 1000.0, 200.0, 50.0, 1150.0, 1, 5)]
     df_valid = spark.createDataFrame(valid_data, schema=schema)
     # Should not raise any exception

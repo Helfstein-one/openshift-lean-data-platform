@@ -113,5 +113,6 @@ class DataQualityValidator:
         ).count()
         if math_mismatches > 0:
             raise ValueError(
-                f"Data Quality Gate Failed: Found {math_mismatches} row(s) with mathematical inconsistency in 'saldo_liquido_real'."
+                f"Data Quality Gate Failed: Found {math_mismatches} row(s) "
+                "with mathematical inconsistency in 'saldo_liquido_real'."
             )
