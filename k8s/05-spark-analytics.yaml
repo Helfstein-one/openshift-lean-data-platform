@@ -7,7 +7,7 @@ data:
   etl_contabil.py: |
     import os
     from pyspark.sql import SparkSession
-    from pyspark.sql.functions import col, when, sum as _sum, count, to_date, lit
+    from pyspark.sql.functions import col, when, sum as _sum, count, to_date, lit, abs as _abs
     from pyspark.sql.types import DoubleType
 
     spark = SparkSession.builder \
@@ -42,6 +42,27 @@ data:
         _sum("flg_reversao").alias("qtd_eventos_reversos"),
         count("*").alias("qtd_total_transacoes")
     )
+
+    # --- DATA QUALITY GATE ---
+    # 1. Validação de data de competência nula
+    null_dates = df_consolidado.filter(col("data_contabil").isNull()).count()
+    if null_dates > 0:
+        raise ValueError(f"Data Quality Gate Failed: Found {null_dates} row(s) with null 'data_contabil'.")
+
+    # 2. Validação de contadores de transações
+    invalid_counts = df_consolidado.filter(
+        (col("qtd_total_transacoes") < 0) |
+        (col("qtd_eventos_reversos") < 0) |
+        (col("qtd_total_transacoes") < col("qtd_eventos_reversos"))
+    ).count()
+    if invalid_counts > 0:
+        raise ValueError(f"Data Quality Gate Failed: Found {invalid_counts} row(s) with invalid transaction counts.")
+
+    # 3. Validação de consistência matemática
+    expected_saldo = col("vol_credito_concedido") + col("vol_credito_liquidado") - col("vol_estornado_total")
+    math_mismatches = df_consolidado.filter(_abs(col("saldo_liquido_real") - expected_saldo) > 0.0001).count()
+    if math_mismatches > 0:
+        raise ValueError(f"Data Quality Gate Failed: Found {math_mismatches} row(s) with mathematical inconsistency in 'saldo_liquido_real'.")
 
     # Persistência via JDBC no PostgreSQL
     df_consolidado.write \
