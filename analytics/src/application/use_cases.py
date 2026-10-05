@@ -1,5 +1,9 @@
 from src.application.ports import DataReader, DataWriter
-from src.domain.financial import AccountingNormalizer, FinancialAggregator
+from src.domain.financial import (
+    AccountingNormalizer,
+    DataQualityValidator,
+    FinancialAggregator,
+)
 
 
 class ETLUseCase:
@@ -11,4 +15,5 @@ class ETLUseCase:
         df_raw = self.reader.read(source_path)
         df_normalized = AccountingNormalizer.normalize(df_raw)
         df_consolidated = FinancialAggregator.aggregate(df_normalized)
+        DataQualityValidator.validate(df_consolidated)
         self.writer.write(df_consolidated, target_table)
