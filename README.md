@@ -8,11 +8,11 @@ Uma plataforma de dados bancária e analítica de ponta a ponta, nativa em cont�
 
 O diagrama abaixo ilustra a jornada completa do dado desde a geração do evento transacional no Core Banking até a camada analítica de apresentação no Superset, operando sob o isolamento de segurança e restrição de recursos do cluster.
 
-![Arquitetura da Plataforma de Dados](docs/architecture/architecture.svg)
+![Arquitetura da Plataforma com Ícones Oficiais](docs/architecture/official_icons_data_platform_arch.jpg)
 
-> 🎮 **Diagrama Interativo (Web Inspector):** Visualize e inspecione componentes, restrições K8s e fluxos clicáveis em [`docs/architecture/architecture_interactive.html`](docs/architecture/architecture_interactive.html).
+> 🎮 **Diagrama Interativo (Web Inspector):** Inspecione componentes, restrições K8s e fluxos clicáveis em [`docs/architecture/architecture_interactive.html`](docs/architecture/architecture_interactive.html).
 >
-> 📐 **Arquivo Editável:** O diagrama com todas as conexões, metadados e camadas está disponível no padrão Draw.io em [`docs/architecture/architecture.drawio`](docs/architecture/architecture.drawio).
+> 📐 **Arquivo Editável:** O diagrama vetorial completo está disponível em [`docs/architecture/architecture.drawio`](docs/architecture/architecture.drawio) e [`docs/architecture/architecture.svg`](docs/architecture/architecture.svg).
 
 ### 🔀 Diagrama de Fluxo e Componentes Paralelizado (Mermaid)
 
@@ -97,6 +97,8 @@ O **Kubernetes** é o maestro de orquestração de contêineres. Ele resolve o d
 
 ### 2.2 O que é o Red Hat OpenShift?
 O **Red Hat OpenShift** é uma distribuição empresarial completa do Kubernetes. Ele não substitui o Kubernetes: **ele é o Kubernetes em seu núcleo**, complementado por camadas enterprise pré-configuradas e validadas:
+
+![Camadas do Kubernetes e Red Hat OpenShift](docs/architecture/openshift_k8s_deepdive.jpg)
 
 ```mermaid
 flowchart TD
