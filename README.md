@@ -98,6 +98,12 @@ O **Kubernetes** é o maestro de orquestração de contêineres. Ele resolve o d
 ### 2.2 O que é o Red Hat OpenShift?
 O **Red Hat OpenShift** é uma distribuição empresarial completa do Kubernetes. Ele não substitui o Kubernetes: **ele é o Kubernetes em seu núcleo**, complementado por camadas enterprise pré-configuradas e validadas:
 
+#### Perspectiva 1: Arquitetura em Camadas Estruturais (Layers & Control Plane)
+![Camadas do Kubernetes e Red Hat OpenShift](docs/architecture/openshift_k8s_layered_architecture.jpg)
+
+#### Perspectiva 2: Visão Isométrica 3D com Detalhamento de Hardware e Orçamento de Memória
+![Visão Isométrica 3D com Detalhamento de Hardware](docs/architecture/openshift_k8s_isometric_details.jpg)
+
 ```mermaid
 flowchart TD
     classDef k8sCore fill:#326CE5,stroke:#FFFFFF,stroke-width:2px,color:white;
