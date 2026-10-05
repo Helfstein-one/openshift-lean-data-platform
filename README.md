@@ -275,3 +275,25 @@ oc logs -f job/spark-manual-run -n data-platform
 
 ## 📄 Licença
 Distribuído sob licença MIT.
+
+---
+
+## 🛠️ 7. Deep-Dive Tecnológico da Plataforma
+
+Para garantir alta disponibilidade em um ambiente de restrição extrema (OpenShift Local com apenas 10.2GB de RAM alocável), a stack tecnológica foi selecionada com foco em minimalismo (lean architecture), computação sob demanda e resiliência a falhas de contêineres:
+
+### ⚡ Apache Kafka (Modo KRaft)
+- **Eliminação do ZooKeeper:** A migração para a arquitetura KRaft unificou o Control Plane e o Data Plane do Kafka, reduzindo em mais de 60% o consumo de memória contínua.
+- **Replicação Fina:** O operador **Strimzi** gerencia o Kafka nativamente via Custom Resource Definitions (CRDs), garantindo auto-recuperação (self-healing) do cluster.
+
+### 🪣 MinIO S3 (Lakehouse Storage)
+- **Abstração Cloud-Native:** Atua como um "Lake" local com API 100% compatível com Amazon S3.
+- **Isolamento de Estado:** Todo evento de ingestão (RAW) é imutável. Arquivos Parquet fragmentados gerados pelo Kafka Sink Connector são armazenados particionados por `ano/mes/dia`.
+
+### ✨ Apache Spark (Arquitetura CronJob Efêmera)
+- **Zero-Cluster Overhead:** Em vez de manter um cluster Standalone ligado ociosamente, optamos pelo `CronJob` do Kubernetes. 
+- **Lifecycle Dinâmico:** Um contêiner de PySpark sobe a cada 2 horas, lê a partição isolada do MinIO via `s3a://`, consolida o faturamento contábil aplicando as regras de estorno, grava o delta no Postgres (JDBC) e imediatamente entra no estado de `Completed`, devolvendo os 600Mi de RAM para a VM.
+
+### 🐘 PostgreSQL & Superset
+- **Camada de Apresentação Otimizada:** O PostgreSQL hospeda exclusivamente o `Data Mart` (esquema Estrela simplificado). Apenas os dados contábeis validados pelo Data Quality Gate do Spark são materializados aqui.
+- **Reversibilidade Contábil em SQL/Dashboard:** Dashboards do Superset não processam regra de negócio, consumindo apenas as visões (Views) já liquidadas de crédito/débito.
