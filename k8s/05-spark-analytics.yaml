@@ -7,19 +7,78 @@ data:
   etl_contabil.py: |
     import os
     from pyspark.sql import SparkSession
-    from pyspark.sql.functions import col, when, sum as _sum, count, to_date, lit
-    from pyspark.sql.types import DoubleType
+    from pyspark.sql.functions import col, when, sum as _sum, count, to_date, lit, struct, to_json, current_timestamp
+    from pyspark.sql.types import DoubleType, StringType
 
     spark = SparkSession.builder \
         .appName("FinancialLedgerReversals") \
         .getOrCreate()
     spark.sparkContext.setLogLevel("ERROR")
 
-    # Ingestão do Data Lake MinIO S3
-    df_raw = spark.read.json("s3a://data-lake/eventos-financeiros/*/*/*/*.json")
+    db_url = os.getenv("DB_URL", "jdbc:postgresql://superset-postgresql.data-platform.svc:5432/superset")
+    db_user = os.getenv("DB_USER", "admin")
+    db_password = os.getenv("DB_PASSWORD", "admin123")
+    dlq_table = os.getenv("DLQ_TABLE", "dlq_error_logs")
+    dlq_topic = os.getenv("KAFKA_DLQ_TOPIC", "events-dlq")
+    kafka_bootstrap = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "data-cluster-kafka-bootstrap.data-platform.svc:9092")
+
+    # Ingestão do Data Lake MinIO S3 com suporte a corrupt record
+    df_raw = spark.read.option("mode", "PERMISSIVE").option("columnNameOfCorruptRecord", "_corrupt_record").json("s3a://data-lake/eventos-financeiros/*/*/*/*.json")
+
+    for expected_col in ["_corrupt_record", "event_type", "timestamp_utc", "partition_key"]:
+        if expected_col not in df_raw.columns:
+            df_raw = df_raw.withColumn(expected_col, lit(None).cast(StringType()))
+
+    # Segregação de mensagens malformadas
+    invalid_condition = (
+        col("_corrupt_record").isNotNull() |
+        col("event_type").isNull() |
+        col("timestamp_utc").isNull() |
+        col("partition_key").isNull()
+    )
+
+    df_invalid = df_raw.filter(invalid_condition)
+    df_valid = df_raw.filter(~invalid_condition)
+
+    if df_invalid.count() > 0:
+        payload_cols = [c for c in df_invalid.columns if c != "_corrupt_record"]
+        raw_payload_expr = to_json(struct([col(c) for c in payload_cols])) if payload_cols else lit("{}")
+
+        df_dlq_pg = df_invalid.select(
+            lit("spark-analytics").alias("source"),
+            when(col("_corrupt_record").isNotNull(), col("_corrupt_record"))
+            .otherwise(lit("Missing mandatory envelope fields (event_type, timestamp_utc, partition_key)")).alias("error_reason"),
+            raw_payload_expr.alias("raw_payload"),
+            current_timestamp().alias("created_at")
+        )
+
+        # Grava erros no Postgres
+        df_dlq_pg.write \
+            .format("jdbc") \
+            .option("url", db_url) \
+            .option("dbtable", dlq_table) \
+            .option("user", db_user) \
+            .option("password", db_password) \
+            .option("driver", "org.postgresql.Driver") \
+            .mode("append") \
+            .save()
+
+        # Tenta enviar mensagens inválidas ao Kafka DLQ
+        try:
+            df_dlq_kafka = df_dlq_pg.select(
+                col("source").alias("key"),
+                to_json(struct("source", "error_reason", "raw_payload", "created_at")).alias("value")
+            )
+            df_dlq_kafka.write \
+                .format("kafka") \
+                .option("kafka.bootstrap.servers", kafka_bootstrap) \
+                .option("topic", dlq_topic) \
+                .save()
+        except Exception:
+            pass
 
     # Normalização Contábil: Reversões geram fluxo financeiro negativo
-    df_normalized = df_raw.select(
+    df_normalized = df_valid.select(
         col("event_type"),
         to_date(col("timestamp_utc")).alias("data_contabil"),
         col("partition_key").alias("cliente_id"),

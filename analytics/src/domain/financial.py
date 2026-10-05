@@ -1,8 +1,34 @@
+from typing import Tuple
+
 from pyspark.sql import DataFrame
-from pyspark.sql.functions import col, count
+from pyspark.sql.functions import col, count, lit
 from pyspark.sql.functions import sum as _sum
 from pyspark.sql.functions import to_date, when
-from pyspark.sql.types import DoubleType
+from pyspark.sql.types import DoubleType, StringType
+
+
+class DLQSegregator:
+    @staticmethod
+    def filter_valid_and_invalid(df_raw: DataFrame) -> Tuple[DataFrame, DataFrame]:
+        for expected_col in [
+            "_corrupt_record",
+            "event_type",
+            "timestamp_utc",
+            "partition_key",
+        ]:
+            if expected_col not in df_raw.columns:
+                df_raw = df_raw.withColumn(expected_col, lit(None).cast(StringType()))
+
+        invalid_condition = (
+            col("_corrupt_record").isNotNull()
+            | col("event_type").isNull()
+            | col("timestamp_utc").isNull()
+            | col("partition_key").isNull()
+        )
+
+        df_invalid = df_raw.filter(invalid_condition)
+        df_valid = df_raw.filter(~invalid_condition)
+        return df_valid, df_invalid
 
 
 class AccountingNormalizer:

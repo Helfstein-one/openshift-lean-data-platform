@@ -68,3 +68,18 @@ spec:
     retention.ms: 7200000
     segment.bytes: 104857600
     cleanup.policy: delete
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: events-dlq
+  namespace: data-platform
+  labels:
+    strimzi.io/cluster: data-cluster
+spec:
+  partitions: 3
+  replicas: 1
+  config:
+    retention.ms: 7200000
+    segment.bytes: 104857600
+    cleanup.policy: delete
