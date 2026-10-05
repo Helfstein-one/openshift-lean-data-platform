@@ -8,13 +8,79 @@ Uma plataforma de dados bancária e analítica de ponta a ponta, nativa em cont�
 
 O diagrama abaixo ilustra a jornada completa do dado desde a geração do evento transacional no Core Banking até a camada analítica de apresentação no Superset, operando sob o isolamento de segurança e restrição de recursos do cluster.
 
-![Arquitetura da Plataforma de Dados](docs/architecture/openshift_data_platform_arch.jpg)
+![Arquitetura da Plataforma de Dados](docs/architecture/architecture.svg)
 
 > 🎮 **Diagrama Interativo (Web Inspector):** Inspecione componentes, restrições K8s e fluxos clicáveis em [`docs/architecture/architecture_interactive.html`](docs/architecture/architecture_interactive.html).
 >
 > 📐 **Arquivo Editável:** O diagrama vetorial completo está disponível em [`docs/architecture/architecture.drawio`](docs/architecture/architecture.drawio) e [`docs/architecture/architecture.svg`](docs/architecture/architecture.svg).
 
-![Diagrama Draw.io de Fluxo Concorrente e Paralelismo](docs/architecture/drawio_parallel_flow.jpg)
+### 🔀 Diagrama de Fluxo e Componentes Paralelizado (Mermaid)
+
+Para facilitar a compreensão do paralelismo do sistema, o fluxo abaixo modela as vias simultâneas de eventos, o isolamento dos workers de processamento e a concorrência entre persistência contábil e consulta analítica:
+
+```mermaid
+flowchart LR
+    classDef producer fill:#306998,stroke:#FFD43B,stroke-width:2px,color:white;
+    classDef kafka fill:#231F20,stroke:#white,stroke-width:2px,color:white;
+    classDef minio fill:#C72E49,stroke:#white,stroke-width:2px,color:white;
+    classDef spark fill:#E25A1C,stroke:#white,stroke-width:2px,color:white;
+    classDef postgres fill:#336791,stroke:#white,stroke-width:2px,color:white;
+    classDef superset fill:#00A699,stroke:#white,stroke-width:2px,color:white;
+    classDef boundary fill:#0F172A,stroke:#3B82F6,stroke-width:2px,stroke-dasharray: 4 4,color:white;
+
+    subgraph CoreBanking ["🐍 Ingestão Transacional Paralela"]
+        direction TB
+        E1["📄 Contratos & Empréstimos"]:::producer
+        E2["⚡ Transações PIX"]:::producer
+        E3["💳 Pagamentos de Parcelas"]:::producer
+        E4["↩️ Estornos & MED"]:::producer
+    end
+
+    subgraph KafkaStream ["🦇 Particionamento Kafka (KRaft)"]
+        direction TB
+        P0["Partição 0 (Clientes Hash A-G)"]:::kafka
+        P1["Partição 1 (Clientes Hash H-P)"]:::kafka
+        P2["Partição 2 (Clientes Hash Q-Z)"]:::kafka
+    end
+
+    subgraph StorageLake ["🪣 Lakehouse S3 (MinIO)"]
+        direction TB
+        B1["raw-financial-lake/year=2026/month=10/"]:::minio
+    end
+
+    subgraph SparkParallel ["✨ PySpark Executors Paralelos (CronJob)"]
+        direction TB
+        W1["Worker 1: Normalização de Contratos e PIX"]:::spark
+        W2["Worker 2: Reversibilidade Contábil de Estornos"]:::spark
+    end
+
+    subgraph ServingDW ["🐘 Data Mart & BI"]
+        direction TB
+        PG[("PostgreSQL 14\nfaturamento_contabil")]:::postgres
+        BI["📊 Superset Dashboards\nConsultas Analíticas"]:::superset
+    end
+
+    %% Conexões do Paralelismo de Ingestão
+    E1 --> P0
+    E2 --> P1
+    E3 --> P2
+    E4 --> P0
+    E4 --> P1
+
+    %% Conexão Kafka -> MinIO
+    P0 -->|"S3 Sink Connector"| B1
+    P1 -->|"S3 Sink Connector"| B1
+    P2 -->|"S3 Sink Connector"| B1
+
+    %% Leitura Paralela Spark
+    B1 ==>|"Leitura Particionada S3A"| W1
+    B1 ==>|"Leitura Particionada S3A"| W2
+
+    %% Agregação e Escrita / Leitura
+    W1 -->|"Consolidação JDBC"| PG
+    W2 -->|"Consolidação JDBC"| PG
+    PG -->|"SQL Queries"| BI
+```
 
 ---
 
@@ -32,7 +98,32 @@ O **Kubernetes** é o maestro de orquestração de contêineres. Ele resolve o d
 ### 2.2 O que é o Red Hat OpenShift?
 O **Red Hat OpenShift** é uma distribuição empresarial completa do Kubernetes. Ele não substitui o Kubernetes: **ele é o Kubernetes em seu núcleo**, complementado por camadas enterprise pré-configuradas e validadas:
 
-![Camadas do Kubernetes e Red Hat OpenShift](docs/architecture/drawio_k8s_openshift_layers.jpg)
+```mermaid
+flowchart TD
+    classDef k8sCore fill:#326CE5,stroke:#FFFFFF,stroke-width:2px,color:white;
+    classDef ocpLayer fill:#EE0000,stroke:#FFFFFF,stroke-width:2px,color:white;
+    classDef base fill:#1E293B,stroke:#64748B,stroke-width:2px,color:white;
+
+    subgraph OS ["Infraestrutura Base"]
+        RHCOS["Red Hat Enterprise Linux CoreOS (RHCOS) / Kernel Seguro"]:::base
+    end
+
+    subgraph K8S ["Núcleo Kubernetes (Padrão CNCF)"]
+        API["kube-apiserver • etcd • kube-scheduler • kubelet • kube-proxy"]:::k8sCore
+    end
+
+    subgraph OCP ["Camadas de Valor Adicionadas pelo OpenShift"]
+        direction TB
+        SCC["🔐 Security Context Constraints (SCC) • Proteção de Execução Root"]:::ocpLayer
+        OLM["📦 Operator Lifecycle Manager (OLM) • Gestão Automatizada de Operadores"]:::ocpLayer
+        ROUTER["🌐 OpenShift Router (HAProxy) • Ingress com Routes Nativas & TLS"]:::ocpLayer
+        BUILD["🔨 Source-to-Image (S2I) & Integrated Container Registry"]:::ocpLayer
+        CONSOLE["🖥️ Web Console Integrado com Métricas e Topologia Visual"]:::ocpLayer
+    end
+
+    RHCOS --> K8S
+    K8S --> OCP
+```
 
 ### 2.3 Comparativo Prático: Onde o OpenShift se Diferencia no Projeto?
 
@@ -49,7 +140,32 @@ O **Red Hat OpenShift** é uma distribuição empresarial completa do Kubernetes
 
 O **OpenShift Local (anteriormente CodeReady Containers - CRC)** roda um cluster OpenShift completo de nó único dentro de uma Máquina Virtual (Hypervisor macOS / Apple Hypervisor Framework).
 
-![Topologia da VM CRC](docs/architecture/drawio_crc_vm_topology.jpg)
+```mermaid
+flowchart TD
+    classDef host fill:#0F172A,stroke:#64748B,stroke-width:2px,color:white;
+    classDef vm fill:#1E293B,stroke:#EE0000,stroke-width:2px,color:white;
+    classDef app fill:#334155,stroke:#3B82F6,stroke-width:2px,color:white;
+
+    subgraph Mac ["Host Físico: Apple Silicon (Mac M-Series - 16GB RAM)"]
+        direction TB
+        OSX["macOS Sequoia / Sonoma"]:::host
+        
+        subgraph VM ["OpenShift Local VM (CRC) — 10.2GB RAM Alocável"]
+            direction TB
+            MasterWorker["Nó Único: Master + Worker Integrados (RHCOS)"]:::vm
+            
+            subgraph DataPlat ["Namespace: data-platform (Orçamento Cirúrgico de Memória)"]
+                KAFKA["Kafka KRaft (600Mi)"]:::app
+                MINIO["MinIO S3 (256Mi)"]:::app
+                POSTGRES["Postgres 14 (300Mi)"]:::app
+                SPARK["Spark CronJob Efêmero (600Mi - Auto-Kill)"]:::app
+                SUPERSET["Superset Web (600Mi)"]:::app
+            end
+        end
+    end
+
+    OSX -->|"crc start / oc CLI"| VM
+```
 
 ### O Desafio de Recursos e o "Orçamento Cirúrgico de Memória"
 Em uma máquina de 16GB, o nó do CRC dispõe de aproximadamente **10.2 GB de memória alocável**. Os operadores de infraestrutura padrão do OpenShift consomem sozinhos quase a totalidade dessa cota:
