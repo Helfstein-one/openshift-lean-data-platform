@@ -11,7 +11,7 @@ def main():
 
     db_url = os.getenv(
         "DB_URL",
-        "jdbc:postgresql://superset-postgresql.data-platform.svc:5432/superset",
+        "jdbc:postgresql://pgbouncer.data-platform.svc:6432/superset",
     )
     db_user = os.getenv("DB_USER", "admin")
     db_password = os.getenv("DB_PASSWORD", "admin123")
