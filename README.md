@@ -57,6 +57,7 @@ flowchart LR
 
     subgraph ServingDW ["🐘 Data Mart & BI"]
         direction TB
+        PGB["⚡ PgBouncer\nConnection Pooler (Porta 6432)"]:::postgres
         PG[("PostgreSQL 14\nfaturamento_contabil")]:::postgres
         BI["📊 Superset Dashboards\nConsultas Analíticas"]:::superset
     end
@@ -78,8 +79,9 @@ flowchart LR
     B1 ==>|"Leitura Particionada S3A"| W2
 
     %% Agregação e Escrita / Leitura
-    W1 -->|"Consolidação JDBC"| PG
-    W2 -->|"Consolidação JDBC"| PG
+    W1 -->|"Consolidação JDBC (6432)"| PGB
+    W2 -->|"Consolidação JDBC (6432)"| PGB
+    PGB -->|"Pool de Conexões"| PG
     PG -->|"SQL Queries"| BI
 ```
 
@@ -259,9 +261,10 @@ oc apply -f k8s/02-kafka-kraft-lean.yaml
 ./k8s/03-superset-postgresql.sh
 ```
 
-### 5. Implantar o Producer e o Job Analítico
+### 5. Implantar o Producer, PgBouncer e Job Analítico
 ```bash
 oc apply -f k8s/04-producer-deployment.yaml
+oc apply -f k8s/07-pgbouncer.yaml
 oc apply -f k8s/05-spark-analytics.yaml
 ```
 
@@ -294,6 +297,7 @@ Para garantir alta disponibilidade em um ambiente de restrição extrema (OpenSh
 - **Zero-Cluster Overhead:** Em vez de manter um cluster Standalone ligado ociosamente, optamos pelo `CronJob` do Kubernetes. 
 - **Lifecycle Dinâmico:** Um contêiner de PySpark sobe a cada 2 horas, lê a partição isolada do MinIO via `s3a://`, consolida o faturamento contábil aplicando as regras de estorno, grava o delta no Postgres (JDBC) e imediatamente entra no estado de `Completed`, devolvendo os 600Mi de RAM para a VM.
 
-### 🐘 PostgreSQL & Superset
+### 🐘 PostgreSQL, PgBouncer & Superset
+- **Connection Pooling Leve (PgBouncer):** Atua como proxy reverso gerenciador de conexões na porta `6432` em modo `transaction`, prevenindo a exaustão de conexões no PostgreSQL (`Too many clients`) durante execuções concorrentes do Spark e consultas do Superset sob o limite de 300Mi de RAM.
 - **Camada de Apresentação Otimizada:** O PostgreSQL hospeda exclusivamente o `Data Mart` (esquema Estrela simplificado). Apenas os dados contábeis validados pelo Data Quality Gate do Spark são materializados aqui.
 - **Reversibilidade Contábil em SQL/Dashboard:** Dashboards do Superset não processam regra de negócio, consumindo apenas as visões (Views) já liquidadas de crédito/débito.

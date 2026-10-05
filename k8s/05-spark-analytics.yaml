@@ -64,10 +64,10 @@ data:
     if math_mismatches > 0:
         raise ValueError(f"Data Quality Gate Failed: Found {math_mismatches} row(s) with mathematical inconsistency in 'saldo_liquido_real'.")
 
-    # Persistência via JDBC no PostgreSQL
+    # Persistência via JDBC no PostgreSQL via PgBouncer Pooler
     df_consolidado.write \
         .format("jdbc") \
-        .option("url", "jdbc:postgresql://superset-postgresql.data-platform.svc:5432/superset") \
+        .option("url", "jdbc:postgresql://pgbouncer.data-platform.svc:6432/superset") \
         .option("dbtable", "faturamento_contabil_diario") \
         .option("user", "admin") \
         .option("password", "admin123") \
