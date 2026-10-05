@@ -179,6 +179,7 @@ Em uma máquina de 16GB, o nó do CRC dispõe de aproximadamente **10.2 GB de me
 1. **Desativação de Operadores Secundários:** O operador de monitoramento do cluster (`openshift-monitoring`), o catálogo de mercado (`marketplace`) e o atualizador de cluster (`cluster-version-operator`) foram escalados para 0 réplicas.
 2. **Kafka sem ZooKeeper (KRaft):** Eliminamos o ZooKeeper do Apache Kafka, reduzindo o consumo de memória de mensageria em mais de 60%.
 3. **Computação Efêmera (Serverless Batch):** Em vez de manter um cluster Spark Standalone ligado 24/7 consumindo RAM, usamos **Kubernetes CronJobs**. O contêiner do PySpark sobe a cada 2 horas, processa a partição de dados do MinIO, grava no Postgres e finaliza (`Completed`), liberando seus 600MiB de RAM imediatamente de volta para a VM.
+4. **Otimização de Footprint do Apache Superset:** O deployment do Superset via Helm foi otimizado reduzindo o número de Gunicorn workers de ~10 (padrão) para apenas 2 trabalhadores com 4 threads, desativando pods de suporte (`supersetWorker` e `supersetCeleryBeat`) e fixando o limite em 512Mi para garantir consumo estritamente inferior a 600MiB de RAM no nó único.
 
 ---
 
@@ -297,3 +298,4 @@ Para garantir alta disponibilidade em um ambiente de restrição extrema (OpenSh
 ### 🐘 PostgreSQL & Superset
 - **Camada de Apresentação Otimizada:** O PostgreSQL hospeda exclusivamente o `Data Mart` (esquema Estrela simplificado). Apenas os dados contábeis validados pelo Data Quality Gate do Spark são materializados aqui.
 - **Reversibilidade Contábil em SQL/Dashboard:** Dashboards do Superset não processam regra de negócio, consumindo apenas as visões (Views) já liquidadas de crédito/débito.
+- **Minimização de Footprint do Superset:** Configurado com apenas 2 Gunicorn workers e 4 threads (`GUNICORN_WORKERS=2`, `SERVER_WORKER_AMOUNT=2`), com pods de Celery Beat e background workers desativados, mantendo o consumo de memória do Superset Web estritamente abaixo de 600MiB de RAM.
