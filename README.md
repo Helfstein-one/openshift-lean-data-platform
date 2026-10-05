@@ -10,7 +10,9 @@ O diagrama abaixo ilustra a jornada completa do dado desde a geração do evento
 
 ![Arquitetura da Plataforma de Dados](docs/architecture/architecture.svg)
 
-> **Arquivo Editável:** O diagrama com todas as conexões, metadados e camadas está disponível no padrão Draw.io em [`docs/architecture/architecture.drawio`](docs/architecture/architecture.drawio).
+> 🎮 **Diagrama Interativo (Web Inspector):** Visualize e inspecione componentes, restrições K8s e fluxos clicáveis em [`docs/architecture/architecture_interactive.html`](docs/architecture/architecture_interactive.html).
+>
+> 📐 **Arquivo Editável:** O diagrama com todas as conexões, metadados e camadas está disponível no padrão Draw.io em [`docs/architecture/architecture.drawio`](docs/architecture/architecture.drawio).
 
 ### 🔀 Diagrama de Fluxo e Componentes Paralelizado (Mermaid)
 
