@@ -15,13 +15,16 @@ spec:
   resources:
     requests:
       cpu: 200m
-      memory: 256Mi
+      memory: 384Mi
     limits:
       cpu: 1000m
       memory: 512Mi
   jvmOptions:
-    "-Xms": "128m"
+    "-Xms": "256m"
     "-Xmx": "256m"
+    "-XX":
+      "UseG1GC": "true"
+      "ExitOnOutOfMemoryError": "true"
 ---
 apiVersion: kafka.strimzi.io/v1
 kind: Kafka
@@ -68,3 +71,49 @@ spec:
     retention.ms: 7200000
     segment.bytes: 104857600
     cleanup.policy: delete
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaConnect
+metadata:
+  name: s3-sink-connect
+  namespace: data-platform
+  annotations:
+    strimzi.io/use-connector-resources: "true"
+spec:
+  version: 3.7.0
+  replicas: 1
+  bootstrapServers: data-cluster-kafka-bootstrap.data-platform.svc:9092
+  resources:
+    requests:
+      cpu: 100m
+      memory: 384Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  jvmOptions:
+    "-Xms": "256m"
+    "-Xmx": "256m"
+    "-XX":
+      "UseG1GC": "true"
+      "ExitOnOutOfMemoryError": "true"
+---
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaConnector
+metadata:
+  name: s3-sink-connector
+  namespace: data-platform
+  labels:
+    strimzi.io/cluster: s3-sink-connect
+spec:
+  class: io.confluent.connect.s3.S3SinkConnector
+  tasksMax: 1
+  config:
+    topics: eventos-financeiros
+    s3.bucket.name: raw-financial-lake
+    s3.region: us-east-1
+    store.url: http://minio.data-platform.svc:9000
+    flush.size: 1000
+    storage.class: io.confluent.connect.s3.storage.S3Storage
+    format.class: io.confluent.connect.s3.format.json.JsonFormat
+    partitioner.class: io.confluent.connect.storage.partitioner.DefaultPartitioner
+    schema.compatibility: NONE
