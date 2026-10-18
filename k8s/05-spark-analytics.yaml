@@ -23,7 +23,8 @@ data:
     kafka_bootstrap = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "data-cluster-kafka-bootstrap.data-platform.svc:9092")
 
     # Ingestão do Data Lake MinIO S3 com suporte a corrupt record
-    df_raw = spark.read.option("mode", "PERMISSIVE").option("columnNameOfCorruptRecord", "_corrupt_record").json("s3a://data-lake/eventos-financeiros/*/*/*/*.json")
+    s3_source = os.getenv("S3_SOURCE", "s3a://raw-financial-lake/eventos-financeiros/*/*/*/*.json")
+    df_raw = spark.read.option("mode", "PERMISSIVE").option("columnNameOfCorruptRecord", "_corrupt_record").json(s3_source)
 
     for expected_col in ["_corrupt_record", "event_type", "timestamp_utc", "partition_key"]:
         if expected_col not in df_raw.columns:

@@ -20,7 +20,7 @@ def main():
     db_user = os.getenv("DB_USER", "admin")
     db_password = os.getenv("DB_PASSWORD", "admin123")
     source_path = os.getenv(
-        "S3_SOURCE", "s3a://data-lake/eventos-financeiros/*/*/*/*.json"
+        "S3_SOURCE", "s3a://raw-financial-lake/eventos-financeiros/*/*/*/*.json"
     )
     target_table = os.getenv("TARGET_TABLE", "faturamento_contabil_diario")
     dlq_table = os.getenv("DLQ_TABLE", "dlq_error_logs")

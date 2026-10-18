@@ -257,15 +257,18 @@ oc apply -f k8s/01-minio-lean.yaml
 oc apply -f k8s/02-kafka-kraft-lean.yaml
 ```
 
-### 4. Provisionar Data Mart e Superset (Helm)
+### 4. Provisionar Data Mart, PgBouncer e Superset (Helm)
 ```bash
 ./k8s/03-superset-postgresql.sh
+oc apply -f k8s/07-pgbouncer.yaml
+
+# Executar DDL do Data Mart, Dead Letter Queue (DLQ) e views analíticas no PostgreSQL:
+oc exec -i -n data-platform $(oc get pods -n data-platform -l app.kubernetes.io/name=postgresql -o jsonpath='{.items[0].metadata.name}') -- psql -U admin -d superset < k8s/06-superset-views.sql
 ```
 
-### 5. Implantar o Producer, PgBouncer e Job Analítico
+### 5. Implantar o Producer e Job Analítico
 ```bash
 oc apply -f k8s/04-producer-deployment.yaml
-oc apply -f k8s/07-pgbouncer.yaml
 oc apply -f k8s/05-spark-analytics.yaml
 ```
 
@@ -303,3 +306,7 @@ Para garantir alta disponibilidade em um ambiente de restrição extrema (OpenSh
 - **Camada de Apresentação Otimizada:** O PostgreSQL hospeda exclusivamente o `Data Mart` (esquema Estrela simplificado). Apenas os dados contábeis validados pelo Data Quality Gate do Spark são materializados aqui.
 - **Reversibilidade Contábil em SQL/Dashboard:** Dashboards do Superset não processam regra de negócio, consumindo apenas as visões (Views) já liquidadas de crédito/débito.
 - **Minimização de Footprint do Superset:** Configurado com apenas 2 Gunicorn workers e 4 threads (`GUNICORN_WORKERS=2`, `SERVER_WORKER_AMOUNT=2`), com pods de Celery Beat e background workers desativados, mantendo o consumo de memória do Superset Web estritamente abaixo de 600MiB de RAM.
+
+### 🛡️ Resiliência & Dead Letter Queue (DLQ)
+- **Segregação Imediata:** Eventos com campos ausentes ou JSON corrompido são capturados antecipadamente no Producer e pelo parser permissivo do PySpark (`_corrupt_record`).
+- **Auditoria Dual:** Registros inválidos são direcionados para o tópico Kafka `events-dlq` e gravados na tabela `dlq_error_logs` no PostgreSQL com o payload original e causa do erro, assegurando que eventos danificados não contaminem o balanço contábil nem paralisem o pipeline.
