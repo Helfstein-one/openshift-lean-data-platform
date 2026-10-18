@@ -14,10 +14,11 @@ def main():
         "KAFKA_BOOTSTRAP_SERVERS", "data-cluster-kafka-bootstrap.data-platform.svc:9092"
     )
     topic = os.getenv("KAFKA_TOPIC", "eventos-financeiros")
+    dlq_topic = os.getenv("KAFKA_DLQ_TOPIC", "events-dlq")
     interval = float(os.getenv("EMISSION_INTERVAL_SEC", "0.6"))
 
     publisher = KafkaMessagePublisher(bootstrap)
-    use_case = ProduceEventsUseCase(publisher, topic, interval)
+    use_case = ProduceEventsUseCase(publisher, topic, interval, dlq_topic)
     use_case.execute()
 
 

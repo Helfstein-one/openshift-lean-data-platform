@@ -13,3 +13,9 @@ class DataWriter(ABC):
     @abstractmethod
     def write(self, df: DataFrame, table: str) -> None:
         pass
+
+
+class DLQWriter(ABC):
+    @abstractmethod
+    def write_dlq(self, df_invalid: DataFrame) -> None:
+        pass

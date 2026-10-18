@@ -1,7 +1,12 @@
 __pycache__/
+*.py[cod]
+*$py.class
 *.pyc
 *.pyo
 *.pyd
 .pytest_cache/
 .coverage
+.coverage.*
 htmlcov/
+.mypy_cache/
+*.tar

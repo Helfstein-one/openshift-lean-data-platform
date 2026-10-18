@@ -38,3 +38,12 @@ class KafkaMessagePublisher(MessagePublisher):
 
     def publish(self, topic: str, key: str, message: Dict[str, Any]) -> None:
         self.producer.send(topic=topic, key=key, value=message)
+
+    def publish_dlq(
+        self, dlq_topic: str, key: str, error_payload: Dict[str, Any]
+    ) -> None:
+        try:
+            self.producer.send(topic=dlq_topic, key=key, value=error_payload)
+            logger.info(f"Mensagem de erro enviada para DLQ: {dlq_topic}")
+        except Exception as e:
+            logger.error(f"Falha ao enviar mensagem para DLQ {dlq_topic}: {e}")

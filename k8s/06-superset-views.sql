@@ -1,3 +1,11 @@
+CREATE TABLE IF NOT EXISTS dlq_error_logs (
+    id SERIAL PRIMARY KEY,
+    source VARCHAR(100),
+    error_reason TEXT,
+    raw_payload TEXT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE OR REPLACE VIEW vw_kpis_risco_chargeback AS
 SELECT 
     data_contabil,

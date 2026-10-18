@@ -15,6 +15,7 @@ data:
 
     BOOTSTRAP = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "data-cluster-kafka-bootstrap.data-platform.svc:9092")
     TOPIC = os.getenv("KAFKA_TOPIC", "eventos-financeiros")
+    DLQ_TOPIC = os.getenv("KAFKA_DLQ_TOPIC", "events-dlq")
     INTERVAL = float(os.getenv("EMISSION_INTERVAL_SEC", "0.6"))
 
     SEGMENTOS = ["VAREJO", "EMPRESAS", "CORPORATE", "AGRO"]
@@ -140,14 +141,24 @@ data:
     funcs, weights = zip(*HANDLERS)
     while True:
         cli = f"CLI-{random.randint(1000, 2500)}"
-        event_dict = random.choices(funcs, weights=weights)[0](cli)
-        envelope = {
-            "spec_version": "1.0", "event_id": str(uuid.uuid4()),
-            "event_type": event_dict["event_type"], "source": "core.banking.stream",
-            "partition_key": cli, "timestamp_utc": datetime.now(timezone.utc).isoformat(),
-            "data": event_dict["payload"]
-        }
-        p.send(topic=TOPIC, key=cli, value=envelope)
+        try:
+            event_dict = random.choices(funcs, weights=weights)[0](cli)
+            envelope = {
+                "spec_version": "1.0", "event_id": str(uuid.uuid4()),
+                "event_type": event_dict["event_type"], "source": "core.banking.stream",
+                "partition_key": cli, "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+                "data": event_dict["payload"]
+            }
+            p.send(topic=TOPIC, key=cli, value=envelope)
+        except Exception as err:
+            logger.error(f"Erro ao processar evento. Direcionando para DLQ ({DLQ_TOPIC}): {err}")
+            dlq_envelope = {
+                "source": "financial-producer",
+                "error_reason": str(err),
+                "raw_payload": str(event_dict) if 'event_dict' in locals() else None,
+                "timestamp_utc": datetime.now(timezone.utc).isoformat()
+            }
+            p.send(topic=DLQ_TOPIC, key=cli, value=dlq_envelope)
         time.sleep(INTERVAL)
 ---
 apiVersion: apps/v1
