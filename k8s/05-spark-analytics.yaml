@@ -7,7 +7,7 @@ data:
   etl_contabil.py: |
     import os
     from pyspark.sql import SparkSession
-    from pyspark.sql.functions import col, when, sum as _sum, count, to_date, lit, struct, to_json, current_timestamp
+    from pyspark.sql.functions import col, when, sum as _sum, count, to_date, lit, struct, to_json, current_timestamp, abs as _abs
     from pyspark.sql.types import DoubleType, StringType
 
     spark = SparkSession.builder \
@@ -15,7 +15,7 @@ data:
         .getOrCreate()
     spark.sparkContext.setLogLevel("ERROR")
 
-    db_url = os.getenv("DB_URL", "jdbc:postgresql://superset-postgresql.data-platform.svc:5432/superset")
+    db_url = os.getenv("DB_URL", "jdbc:postgresql://pgbouncer.data-platform.svc:6432/superset")
     db_user = os.getenv("DB_USER", "admin")
     db_password = os.getenv("DB_PASSWORD", "admin123")
     dlq_table = os.getenv("DLQ_TABLE", "dlq_error_logs")
@@ -102,10 +102,31 @@ data:
         count("*").alias("qtd_total_transacoes")
     )
 
-    # Persistência via JDBC no PostgreSQL
+    # --- DATA QUALITY GATE ---
+    # 1. Validação de data de competência nula
+    null_dates = df_consolidado.filter(col("data_contabil").isNull()).count()
+    if null_dates > 0:
+        raise ValueError(f"Data Quality Gate Failed: Found {null_dates} row(s) with null 'data_contabil'.")
+
+    # 2. Validação de contadores de transações
+    invalid_counts = df_consolidado.filter(
+        (col("qtd_total_transacoes") < 0) |
+        (col("qtd_eventos_reversos") < 0) |
+        (col("qtd_total_transacoes") < col("qtd_eventos_reversos"))
+    ).count()
+    if invalid_counts > 0:
+        raise ValueError(f"Data Quality Gate Failed: Found {invalid_counts} row(s) with invalid transaction counts.")
+
+    # 3. Validação de consistência matemática
+    expected_saldo = col("vol_credito_concedido") + col("vol_credito_liquidado") - col("vol_estornado_total")
+    math_mismatches = df_consolidado.filter(_abs(col("saldo_liquido_real") - expected_saldo) > 0.0001).count()
+    if math_mismatches > 0:
+        raise ValueError(f"Data Quality Gate Failed: Found {math_mismatches} row(s) with mathematical inconsistency in 'saldo_liquido_real'.")
+
+    # Persistência via JDBC no PostgreSQL via PgBouncer Pooler
     df_consolidado.write \
         .format("jdbc") \
-        .option("url", "jdbc:postgresql://superset-postgresql.data-platform.svc:5432/superset") \
+        .option("url", "jdbc:postgresql://pgbouncer.data-platform.svc:6432/superset") \
         .option("dbtable", "faturamento_contabil_diario") \
         .option("user", "admin") \
         .option("password", "admin123") \

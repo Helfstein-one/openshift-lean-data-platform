@@ -3,6 +3,7 @@ from typing import Optional
 from src.application.ports import DataReader, DataWriter, DLQWriter
 from src.domain.financial import (
     AccountingNormalizer,
+    DataQualityValidator,
     DLQSegregator,
     FinancialAggregator,
 )
@@ -28,4 +29,5 @@ class ETLUseCase:
 
         df_normalized = AccountingNormalizer.normalize(df_valid)
         df_consolidated = FinancialAggregator.aggregate(df_normalized)
+        DataQualityValidator.validate(df_consolidated)
         self.writer.write(df_consolidated, target_table)

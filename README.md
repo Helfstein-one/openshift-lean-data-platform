@@ -57,6 +57,7 @@ flowchart LR
 
     subgraph ServingDW ["🐘 Data Mart & BI"]
         direction TB
+        PGB["⚡ PgBouncer\nConnection Pooler (Porta 6432)"]:::postgres
         PG[("PostgreSQL 14\nfaturamento_contabil")]:::postgres
         BI["📊 Superset Dashboards\nConsultas Analíticas"]:::superset
     end
@@ -78,8 +79,9 @@ flowchart LR
     B1 ==>|"Leitura Particionada S3A"| W2
 
     %% Agregação e Escrita / Leitura
-    W1 -->|"Consolidação JDBC"| PG
-    W2 -->|"Consolidação JDBC"| PG
+    W1 -->|"Consolidação JDBC (6432)"| PGB
+    W2 -->|"Consolidação JDBC (6432)"| PGB
+    PGB -->|"Pool de Conexões"| PG
     PG -->|"SQL Queries"| BI
 ```
 
@@ -179,6 +181,7 @@ Em uma máquina de 16GB, o nó do CRC dispõe de aproximadamente **10.2 GB de me
 1. **Desativação de Operadores Secundários:** O operador de monitoramento do cluster (`openshift-monitoring`), o catálogo de mercado (`marketplace`) e o atualizador de cluster (`cluster-version-operator`) foram escalados para 0 réplicas.
 2. **Kafka sem ZooKeeper (KRaft):** Eliminamos o ZooKeeper do Apache Kafka, reduzindo o consumo de memória de mensageria em mais de 60%.
 3. **Computação Efêmera (Serverless Batch):** Em vez de manter um cluster Spark Standalone ligado 24/7 consumindo RAM, usamos **Kubernetes CronJobs**. O contêiner do PySpark sobe a cada 2 horas, processa a partição de dados do MinIO, grava no Postgres e finaliza (`Completed`), liberando seus 600MiB de RAM imediatamente de volta para a VM.
+4. **Otimização de Footprint do Apache Superset:** O deployment do Superset via Helm foi otimizado reduzindo o número de Gunicorn workers de ~10 (padrão) para apenas 2 trabalhadores com 4 threads, desativando pods de suporte (`supersetWorker` e `supersetCeleryBeat`) e fixando o limite em 512Mi para garantir consumo estritamente inferior a 600MiB de RAM no nó único.
 
 ---
 
@@ -259,9 +262,10 @@ oc apply -f k8s/02-kafka-kraft-lean.yaml
 ./k8s/03-superset-postgresql.sh
 ```
 
-### 5. Implantar o Producer e o Job Analítico
+### 5. Implantar o Producer, PgBouncer e Job Analítico
 ```bash
 oc apply -f k8s/04-producer-deployment.yaml
+oc apply -f k8s/07-pgbouncer.yaml
 oc apply -f k8s/05-spark-analytics.yaml
 ```
 
@@ -275,3 +279,27 @@ oc logs -f job/spark-manual-run -n data-platform
 
 ## 📄 Licença
 Distribuído sob licença MIT.
+
+---
+
+## 🛠️ 7. Deep-Dive Tecnológico da Plataforma
+
+Para garantir alta disponibilidade em um ambiente de restrição extrema (OpenShift Local com apenas 10.2GB de RAM alocável), a stack tecnológica foi selecionada com foco em minimalismo (lean architecture), computação sob demanda e resiliência a falhas de contêineres:
+
+### ⚡ Apache Kafka (Modo KRaft)
+- **Eliminação do ZooKeeper:** A migração para a arquitetura KRaft unificou o Control Plane e o Data Plane do Kafka, reduzindo em mais de 60% o consumo de memória contínua.
+- **Replicação Fina:** O operador **Strimzi** gerencia o Kafka nativamente via Custom Resource Definitions (CRDs), garantindo auto-recuperação (self-healing) do cluster.
+
+### 🪣 MinIO S3 (Lakehouse Storage)
+- **Abstração Cloud-Native:** Atua como um "Lake" local com API 100% compatível com Amazon S3.
+- **Isolamento de Estado:** Todo evento de ingestão (RAW) é imutável. Arquivos Parquet fragmentados gerados pelo Kafka Sink Connector são armazenados particionados por `ano/mes/dia`.
+
+### ✨ Apache Spark (Arquitetura CronJob Efêmera)
+- **Zero-Cluster Overhead:** Em vez de manter um cluster Standalone ligado ociosamente, optamos pelo `CronJob` do Kubernetes. 
+- **Lifecycle Dinâmico:** Um contêiner de PySpark sobe a cada 2 horas, lê a partição isolada do MinIO via `s3a://`, consolida o faturamento contábil aplicando as regras de estorno, grava o delta no Postgres (JDBC) e imediatamente entra no estado de `Completed`, devolvendo os 600Mi de RAM para a VM.
+
+### 🐘 PostgreSQL, PgBouncer & Superset
+- **Connection Pooling Leve (PgBouncer):** Atua como proxy reverso gerenciador de conexões na porta `6432` em modo `transaction`, prevenindo a exaustão de conexões no PostgreSQL (`Too many clients`) durante execuções concorrentes do Spark e consultas do Superset sob o limite de 300Mi de RAM.
+- **Camada de Apresentação Otimizada:** O PostgreSQL hospeda exclusivamente o `Data Mart` (esquema Estrela simplificado). Apenas os dados contábeis validados pelo Data Quality Gate do Spark são materializados aqui.
+- **Reversibilidade Contábil em SQL/Dashboard:** Dashboards do Superset não processam regra de negócio, consumindo apenas as visões (Views) já liquidadas de crédito/débito.
+- **Minimização de Footprint do Superset:** Configurado com apenas 2 Gunicorn workers e 4 threads (`GUNICORN_WORKERS=2`, `SERVER_WORKER_AMOUNT=2`), com pods de Celery Beat e background workers desativados, mantendo o consumo de memória do Superset Web estritamente abaixo de 600MiB de RAM.
