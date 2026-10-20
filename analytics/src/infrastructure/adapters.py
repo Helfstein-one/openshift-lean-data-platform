@@ -4,7 +4,12 @@ from typing import Optional
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql.functions import col, current_timestamp, lit, struct, to_json, when
 from pyspark.sql.types import StringType
-from src.application.ports import DataReader, DataWriter, DLQWriter
+from src.application.ports import (
+    DataReader,
+    DataWriter,
+    DLQWriter,
+    SilverTableWriter,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -104,3 +109,12 @@ class PostgresJDBCDLQWriter(DLQWriter):
                 logger.warning(
                     f"Falha ao enviar mensagens invalidas para Kafka DLQ: {e}"
                 )
+
+
+class IcebergSilverWriter(SilverTableWriter):
+    def __init__(self, mode: str = "append"):
+        self.mode = mode
+
+    def write_silver(self, df_normalized: DataFrame, target_table: str) -> None:
+        """Persists normalized events into the Apache Iceberg Silver table."""
+        df_normalized.write.format("iceberg").mode(self.mode).save(target_table)

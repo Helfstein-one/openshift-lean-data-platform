@@ -3,6 +3,7 @@ import os
 from pyspark.sql import SparkSession
 from src.application.use_cases import ETLUseCase
 from src.infrastructure.adapters import (
+    IcebergSilverWriter,
     PostgresJDBCDLQWriter,
     PostgresJDBCWriter,
     S3JsonReader,
@@ -22,6 +23,9 @@ def main():
     source_path = os.getenv(
         "S3_SOURCE", "s3a://raw-financial-lake/eventos-financeiros/*/*/*/*.json"
     )
+    silver_table = os.getenv(
+        "SILVER_TABLE", "lakehouse.silver_transacoes_financeiras"
+    )
     target_table = os.getenv("TARGET_TABLE", "faturamento_contabil_diario")
     dlq_table = os.getenv("DLQ_TABLE", "dlq_error_logs")
     dlq_topic = os.getenv("KAFKA_DLQ_TOPIC", "events-dlq")
@@ -30,13 +34,14 @@ def main():
     )
 
     reader = S3JsonReader(spark)
+    silver_writer = IcebergSilverWriter()
     writer = PostgresJDBCWriter(db_url, db_user, db_password)
     dlq_writer = PostgresJDBCDLQWriter(
         db_url, db_user, db_password, dlq_table, dlq_topic, kafka_bootstrap
     )
 
-    use_case = ETLUseCase(reader, writer, dlq_writer)
-    use_case.execute(source_path, target_table)
+    use_case = ETLUseCase(reader, writer, dlq_writer, silver_writer)
+    use_case.execute(source_path, target_table, silver_table)
 
     spark.stop()
 

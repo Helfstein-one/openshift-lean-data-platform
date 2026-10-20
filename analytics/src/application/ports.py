@@ -15,6 +15,12 @@ class DataWriter(ABC):
         pass
 
 
+class SilverTableWriter(ABC):
+    @abstractmethod
+    def write_silver(self, df_normalized: DataFrame, target_table: str) -> None:
+        pass
+
+
 class DLQWriter(ABC):
     @abstractmethod
     def write_dlq(self, df_invalid: DataFrame) -> None:

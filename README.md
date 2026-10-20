@@ -185,21 +185,117 @@ Em uma máquina de 16GB, o nó do CRC dispõe de aproximadamente **10.2 GB de me
 
 ---
 
-## 🧩 4. Arquitetura de Software dos Componentes
+## 🧩 4. Arquitetura de Software dos Componentes (Hexagonal & SOLID)
 
-O projeto segue os princípios **SOLID** e a **Arquitetura Hexagonal (Ports and Adapters)**:
+Toda a base de código foi estruturada sob o paradigma da **Arquitetura Hexagonal (Ports and Adapters)** de Alistair Cockburn e rigorosamente alinhada aos **Princípios SOLID**, garantindo que o núcleo das regras de negócio financeiras permaneça 100% puro, testável e agnóstico de frameworks, drivers ou serviços de nuvem.
 
-### 🐍 `producer/` (Core Banking Producer)
+### 4.1 Visão Hexagonal (Ports & Adapters)
+
+```mermaid
+flowchart TD
+    classDef domain fill:#0F172A,stroke:#3B82F6,stroke-width:3px,color:white;
+    classDef appCore fill:#1E293B,stroke:#10B981,stroke-width:2px,color:white;
+    classDef ports fill:#334155,stroke:#F59E0B,stroke-width:2px,color:white;
+    classDef adapters fill:#18181B,stroke:#EC4899,stroke-width:2px,color:white;
+
+    subgraph ExternalSources ["Infraestrutura Externa (Drivers & Sinks)"]
+        S3In["🪣 MinIO S3 (Bronze RAW JSON)"]:::adapters
+        KDLQ["🦇 Kafka events-dlq"]:::adapters
+        ICE["🧊 Apache Iceberg (Silver Parquet ACID)"]:::adapters
+        PGGold["🐘 PostgreSQL (Gold Data Mart)"]:::adapters
+        PGDLQ["🐘 Postgres (dlq_error_logs)"]:::adapters
+    end
+
+    subgraph HexagonBoundary ["Hexágono: analytics/src"]
+        subgraph PortsLayer ["Portas Abstratas (application/ports.py)"]
+            P_In["Porta de Leitura:\nDataReader"]:::ports
+            P_Silver["Porta Silver:\nSilverTableWriter"]:::ports
+            P_Gold["Porta Gold:\nDataWriter"]:::ports
+            P_DLQ["Porta de Falhas:\nDLQWriter"]:::ports
+        end
+
+        subgraph ApplicationLayer ["Casos de Uso (application/use_cases.py)"]
+            UC["ETLUseCase (Orquestrador Puro)"]:::appCore
+        end
+
+        subgraph DomainCore ["Núcleo de Domínio Contábil (domain/financial.py)"]
+            direction TB
+            D1["DLQSegregator\n(Validação de Envelopes)"]:::domain
+            D2["AccountingNormalizer\n(Regras de Estorno & MED)"]:::domain
+            D3["FinancialAggregator\n(Consolidação de Saldos)"]:::domain
+            D4["DataQualityValidator\n(Gate de Invariantes)"]:::domain
+        end
+    end
+
+    %% Ingestão
+    S3In --> P_In
+    P_In --> UC
+
+    %% Orquestração do Domínio
+    UC --> D1
+    UC --> D2
+    UC --> D3
+    UC --> D4
+
+    %% Escrita desacoplada via Portas
+    UC --> P_DLQ
+    UC --> P_Silver
+    UC --> P_Gold
+
+    %% Adaptadores de Saída
+    P_DLQ --> KDLQ
+    P_DLQ --> PGDLQ
+    P_Silver --> ICE
+    P_Gold --> PGGold
+```
+
+---
+
+### 4.2 Mapeamento Prático dos Princípios SOLID
+
+| Princípio | Aplicação no Código do Projeto | Benefício Técnico |
+| :--- | :--- | :--- |
+| **S — Single Responsibility Principle (SRP)** | Cada classe no domínio tem uma única responsabilidade de negócio:<br>• [`DLQSegregator`](file:///Users/mauriciohelfstein/dev/openshift-lean-data-platform/analytics/src/domain/financial.py): segrega mensagens inválidas/corrompidas do stream.<br>• [`AccountingNormalizer`](file:///Users/mauriciohelfstein/dev/openshift-lean-data-platform/analytics/src/domain/financial.py): aplica valor financeiro de contratos, transações e inversão de estornos.<br>• [`FinancialAggregator`](file:///Users/mauriciohelfstein/dev/openshift-lean-data-platform/analytics/src/domain/financial.py): computa totais de liquidação, crédito e saldo diário.<br>• [`DataQualityValidator`](file:///Users/mauriciohelfstein/dev/openshift-lean-data-platform/analytics/src/domain/financial.py): valida integridade matemática e datas nulas. | Nenhuma classe acumula lógicas concorrentes; alterações em regras contábeis nunca afetam segregação de mensagens. |
+| **O — Open/Closed Principle (OCP)** | Novas camadas de persistência (como a introdução da camada Silver em Apache Iceberg) foram adicionadas criando um novo adaptador ([`IcebergSilverWriter`](file:///Users/mauriciohelfstein/dev/openshift-lean-data-platform/analytics/src/infrastructure/adapters.py)) que implementa a porta [`SilverTableWriter`](file:///Users/mauriciohelfstein/dev/openshift-lean-data-platform/analytics/src/application/ports.py). | O código do motor de domínio e do caso de uso [`ETLUseCase`](file:///Users/mauriciohelfstein/dev/openshift-lean-data-platform/analytics/src/application/use_cases.py) é fechado para modificação de negócio e aberto para extensão tecnológica. |
+| **L — Liskov Substitution Principle (LSP)** | Todo leitor e escritor concreto em [`adapters.py`](file:///Users/mauriciohelfstein/dev/openshift-lean-data-platform/analytics/src/infrastructure/adapters.py) pode ser substituído por mocks ([`MockDataReader`](file:///Users/mauriciohelfstein/dev/openshift-lean-data-platform/analytics/tests/test_analytics.py), `MockDataWriter`, `MockSilverWriter`) sem que o comportamento do pipeline quebre ou precise de branches condicionais (`if isinstance`). | Testabilidade unitária ultra-rápida em milissegundos sem depender de cluster Hadoop ou PostgreSQL vivo. |
+| **I — Interface Segregation Principle (ISP)** | Em vez de criar uma interface monolítica (`IDataEngine`), o sistema define interfaces pequenas e especializadas em [`ports.py`](file:///Users/mauriciohelfstein/dev/openshift-lean-data-platform/analytics/src/application/ports.py):<br>• `DataReader`: apenas contrato de leitura.<br>• `SilverTableWriter`: apenas contrato de materialização transacional.<br>• `DataWriter`: apenas contrato de persistência agregada.<br>• `DLQWriter`: apenas desvio de mensagens falhas. | Clientes e adaptadores não são forçados a implementar métodos que não utilizam. |
+| **D — Dependency Inversion Principle (DIP)** | O caso de uso [`ETLUseCase`](file:///Users/mauriciohelfstein/dev/openshift-lean-data-platform/analytics/src/application/use_cases.py) não instancia nem depende de JDBC, S3A, Postgres ou Iceberg. Ele depende estritamente das interfaces abstratas de [`ports.py`](file:///Users/mauriciohelfstein/dev/openshift-lean-data-platform/analytics/src/application/ports.py). A injeção de dependência concreta ocorre no ponto de entrada [`main.py`](file:///Users/mauriciohelfstein/dev/openshift-lean-data-platform/analytics/src/main.py). | Módulos de alto nível de governança contábil não dependem de módulos de baixo nível de storage; ambos dependem de abstrações. |
+
+---
+
+### 4.3 Arquitetura Medallion: Bronze ➔ Silver (Iceberg) ➔ Gold
+
+Para viabilizar **Time Travel**, auditoria contábil imutável e transações ACID sem estourar o orçamento de memória (10.2GB RAM), a plataforma emprega a estratégia **Medallion**:
+
+1. **Camada Bronze (RAW Ingestion):**
+   - Arquivos JSON brutos imutáveis gravados pelo Kafka S3 Sink Connector em `s3a://raw-financial-lake/eventos-financeiros/`.
+   - Permite reprocessamento histórico retroativo integral.
+2. **Camada Silver (Transacional ACID - Apache Iceberg):**
+   - Tabela `lakehouse.silver_transacoes_financeiras` formatada em **Parquet colunar**.
+   - Gerenciada pelo catálogo **JDBC do PostgreSQL** existente (Custo zero de pods adicionais na VM).
+   - Suporte nativo a **Time Travel**:
+     ```python
+     # Reprodução de saldo contábil no estado exato de uma data/hora no passado
+     df_passado = spark.read.option("as-of-timestamp", "1729382400000").table("lakehouse.silver_transacoes_financeiras")
+     ```
+3. **Camada Gold (Data Mart Agregado):**
+   - Tabela `faturamento_contabil_diario` no PostgreSQL servida pelo pooler **PgBouncer (porta 6432)** para alimentar diretamente os dashboards e KPIs do **Apache Superset**.
+
+---
+
+### 4.4 Módulos do Sistema
+
+#### 🐍 `producer/` (Core Banking Producer)
 Simula os fluxos de um banco digital moderno emitindo eventos financeiros no formato JSON:
 - **`domain/`**: Entidades puras (`FinancialEvent`) e geradores de regras de negócio (Contratos, Empréstimos, Pagamentos, PIX, Estornos e Disputas do Mecanismo Especial de Devolução - MED).
 - **`application/`**: Casos de uso (`ProduceEventsUseCase`) e portas de saída abstratas (`MessagePublisher`).
-- **`infrastructure/`**: Adaptador concreto para mensageria (`KafkaMessagePublisher`) injetado via porta.
+- **`infrastructure/`**: Adaptador concreto para mensageria (`KafkaMessagePublisher`) injetado via porta com desvio automático de falhas para DLQ.
 
-### ✨ `analytics/` (PySpark Accounting Engine)
+#### ✨ `analytics/` (PySpark Accounting Engine)
 Motor analítico em batch que implementa a **Reversibilidade Contábil**:
 - Normaliza tipos de eventos conflitantes (pagamentos vs estornos).
 - Eventos de contestação ou devolução entram com valor invertido (`-col("valor")`) abatendo a receita contábil da data de competência.
-- Saída agregada gravada diretamente na tabela analítica `faturamento_contabil_diario` no PostgreSQL.
+- Gravação transacional na camada Silver Iceberg e consolidação final na camada Gold PostgreSQL.
 
 ---
 

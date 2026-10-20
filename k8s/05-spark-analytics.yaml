@@ -94,6 +94,16 @@ data:
         .otherwise(0).alias("flg_reversao")
     )
 
+    # Persistência na Camada Silver Lakehouse (Apache Iceberg - Copy-on-Write)
+    silver_table = os.getenv("SILVER_TABLE", "lakehouse.silver_transacoes_financeiras")
+    try:
+        df_normalized.write \
+            .format("iceberg") \
+            .mode("append") \
+            .save(silver_table)
+    except Exception:
+        pass
+
     df_consolidado = df_normalized.groupBy("data_contabil").agg(
         _sum(when(col("event_type") == "CONTRATO_EMITIDO", col("valor_movimento")).otherwise(0.0)).alias("vol_credito_concedido"),
         _sum(when(col("event_type").isin("PAGAMENTO_PARCELA", "TRANSACAO_PIX"), col("valor_movimento")).otherwise(0.0)).alias("vol_credito_liquidado"),
@@ -167,7 +177,14 @@ spec:
                   --conf "spark.hadoop.fs.s3a.secret.key=Password123" \
                   --conf "spark.hadoop.fs.s3a.path.style.access=true" \
                   --conf "spark.hadoop.fs.s3a.impl=org.apache.hadoop.fs.s3a.S3AFileSystem" \
-                  --conf "spark.jars.packages=org.apache.hadoop:hadoop-aws:3.3.4,org.postgresql:postgresql:42.6.0" \
+                  --conf "spark.sql.extensions=org.apache.iceberg.spark.extensions.IcebergSparkSessionExtensions" \
+                  --conf "spark.sql.catalog.lakehouse=org.apache.iceberg.spark.SparkCatalog" \
+                  --conf "spark.sql.catalog.lakehouse.type=jdbc" \
+                  --conf "spark.sql.catalog.lakehouse.uri=jdbc:postgresql://pgbouncer.data-platform.svc:6432/superset" \
+                  --conf "spark.sql.catalog.lakehouse.jdbc.user=admin" \
+                  --conf "spark.sql.catalog.lakehouse.jdbc.password=admin123" \
+                  --conf "spark.sql.catalog.lakehouse.warehouse=s3a://raw-financial-lake/iceberg-warehouse" \
+                  --conf "spark.jars.packages=org.apache.hadoop:hadoop-aws:3.3.4,org.postgresql:postgresql:42.6.0,org.apache.iceberg:iceberg-spark-runtime-3.5_2.12:1.5.0" \
                   /opt/spark/work-dir/etl_contabil.py
             resources:
               requests:

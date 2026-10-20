@@ -44,6 +44,16 @@ class MockDLQWriter:
         self.dlq_df = df_invalid
 
 
+class MockSilverWriter:
+    def __init__(self):
+        self.silver_df = None
+        self.silver_table = None
+
+    def write_silver(self, df_normalized, target_table):
+        self.silver_df = df_normalized
+        self.silver_table = target_table
+
+
 def test_normalize_and_aggregate(spark):
     data = [
         {
@@ -150,6 +160,35 @@ def test_etl_use_case_with_dlq(spark):
     assert writer.written_df is not None
     assert dlq_writer.dlq_df is not None
     assert dlq_writer.dlq_df.count() == 1
+
+
+def test_etl_use_case_with_silver_iceberg(spark):
+    data = [
+        {
+            "event_type": "CONTRATO_EMITIDO",
+            "timestamp_utc": "2026-10-01T10:00:00Z",
+            "partition_key": "C1",
+            "data": {"valor_contratado": 1000.0},
+            "_corrupt_record": None,
+        }
+    ]
+    df_raw = spark.createDataFrame(data)
+
+    reader = MockDataReader(df_raw)
+    writer = MockDataWriter()
+    silver_writer = MockSilverWriter()
+
+    use_case = ETLUseCase(reader, writer, silver_writer=silver_writer)
+    use_case.execute(
+        "s3a://dummy",
+        "gold_table",
+        silver_table="lakehouse.silver_transacoes",
+    )
+
+    assert writer.written_df is not None
+    assert silver_writer.silver_df is not None
+    assert silver_writer.silver_table == "lakehouse.silver_transacoes"
+    assert silver_writer.silver_df.count() == 1
 
 
 def test_data_quality_success(spark):
